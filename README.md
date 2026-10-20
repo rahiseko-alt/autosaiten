@@ -4,7 +4,23 @@
 仕様は `docs/DESIGN_SPEC.md`（変更は `docs/DESIGN_ADDENDUM.md`）、用語は `CONTEXT.md` にあります。
 
 - テスト: `npm test`（純粋ロジックの単体テスト。Google の環境は不要）
-- 配備: `cp .clasp.json.example .clasp.json` にスクリプトIDを書き、`clasp push`（詳しい手順は T10 で整備予定）
+- 配備と動作確認は下の「導入と動作確認」を参照
+
+## 導入と動作確認（導入担当者向け）
+
+実際の Google 環境での確認は、まだ誰も行っていません。下の各項目は **【未確認】** です。確認できたら印を外してください。
+
+1. 空のスプレッドシートを作り、「拡張機能 > Apps Script」を開いて、プロジェクトの設定からスクリプトIDを控える
+2. このリポジトリで `npm install -g @google/clasp`、`clasp login`、`cp .clasp.json.example .clasp.json`（スクリプトIDを書く）、`clasp push`
+3. スプレッドシートを開き直し、メニュー「AI Grader > 初期セットアップ」を実行して権限を許可する
+4. Questions に問題を入力し、Control の「これでOK」にチェックする
+
+確認項目:
+
+- 【未確認】初期セットアップで8シート（Control・Questions・Rubrics・Settings・Results・Queue・FormMapping・Logs）ができる
+- 【未確認】何度実行しても、トリガーが2本（編集時・1分ごと）のまま増えない
+- 【未確認】Questions に不備があるとき、Control の MESSAGE に全件が日本語で出て STATUS が ERROR になる
+- 【未確認】不備が無いとき、Control の集計（問題数・合計点・AUTO/LLM/MANUAL）が出る
 
 ---
 
