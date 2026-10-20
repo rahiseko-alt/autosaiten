@@ -1,3 +1,13 @@
+# Google Forms AI Grader
+
+教師がスプレッドシートだけを操作して、Googleフォーム試験の生成から採点までを行う仕組みです。
+仕様は `docs/DESIGN_SPEC.md`（変更は `docs/DESIGN_ADDENDUM.md`）、用語は `CONTEXT.md` にあります。
+
+- テスト: `npm test`（純粋ロジックの単体テスト。Google の環境は不要）
+- 配備: `cp .clasp.json.example .clasp.json` にスクリプトIDを書き、`clasp push`（詳しい手順は T10 で整備予定）
+
+---
+
 # Matt2
 
 Claude Code で開発を進めるための**テンプレート**です。ここから複製して、新しいプロジェクトを始めます。

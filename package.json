@@ -1,0 +1,10 @@
+{
+  "name": "google-forms-ai-grader",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Googleスプレッドシートだけで、Googleフォーム試験の生成から採点までを行う",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "license": "UNLICENSED"
+}
