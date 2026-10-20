@@ -21,11 +21,12 @@ var AUTHORING_CELLS = {
   FORM_TITLE: 'B7', FORM_DESCRIPTION: 'B8'
 };
 var AUTHORING_LABELS = [
-  ['試験作成', ''], ['これでOK', false], ['状態', 'IDLE'],
+  ['試験作成', ''], ['これでOK', false], ['状態', '待機中'],
   ['メッセージ', '下の表に問題を書いてから、「これでOK」にチェックしてください'],
   ['フォームURL（学生に配る）', ''], ['合計点', ''], ['フォームのタイトル', ''], ['フォームの説明', '']
 ];
 var AUTHORING_HEADER_ROW = 10;
+var AUTHORING_STATUS_LABELS = { IDLE: '待機中', VALIDATING: '確認中', BUILDING: 'フォーム作成中', READY: '準備完了', ERROR: 'エラー' };
 
 var SHEET_HEADERS = {
   Questions: ['enabled', 'question_id', 'section', 'question_text', 'question_type', 'required', 'points',

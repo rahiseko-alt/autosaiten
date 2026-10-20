@@ -150,7 +150,10 @@ function gradeJob_(job, settings, deps) {
   });
   var mappedIds = {};
   Object.keys(questionOfItem).forEach(function (k) { mappedIds[questionOfItem[k]] = true; });
-  var questions = readTable(SHEET_NAMES.QUESTIONS).filter(function (q) { return mappedIds[q.question_id]; });
+  // その版のフォームに載っていた問題は、今は掲載を外していても採点する
+  var questions = readTable(SHEET_NAMES.QUESTIONS)
+    .filter(function (q) { return mappedIds[q.question_id]; })
+    .map(function (q) { return Object.assign({}, q, { enabled: true }); });
 
   return gradeResponse({
     response: {

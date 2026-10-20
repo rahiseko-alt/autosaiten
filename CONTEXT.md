@@ -13,12 +13,12 @@ GitHub・clasp・Apps Script・APIキーの初期設定だけを行う人。
 _Avoid_: 開発者, 管理者
 
 **問題**:
-Questionsシートの1行。question_id で一意に識別される。
+試験作成シートの表の1行（裏方では Questions の1行）。問題番号で一意に識別される。
 _Avoid_: 設問, 質問
 
-**question_id**:
-問題を結びつける固定ID。問題文を変えても変えない。
-_Avoid_: 問題番号, タイトル
+**問題番号（question_id）**:
+問題を結びつける固定ID。試験作成シートの右端に自動で付き、問題文を変えても、行を並べ替えても変わらない。
+_Avoid_: タイトル, 行番号
 
 **採点方式**:
 問題ごとの採点の担い手。AUTO・LLM・MANUAL の3つ。
@@ -33,7 +33,7 @@ _Avoid_: 自動
 _Avoid_: AI採点
 
 **MANUAL**:
-教師がResultsにmanual_scoreを入力して採点する方式。
+Claude（または教師）が manual_score を入れて採点する方式。試験作成シートの種類「記述」がこれにあたる。
 
 **ルーブリック**:
 LLM採点の評価基準の集まり。rubric_id と rubric_version で識別する。

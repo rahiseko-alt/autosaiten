@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { assignQuestionIds, toQuestionRows, fromQuestionRows, toTeacherMessage } = require('../src/Authoring.js');
+const { assignQuestionIds, toQuestionRows, fromQuestionRows, toTeacherMessage, mergeWithExisting } = require('../src/Authoring.js');
 
 function row(over) {
   return Object.assign({ 掲載: true, 問題文: '日本の首都は？', 種類: '短答', 配点: 5, 正答: '東京', 別解: '東京都', 選択肢: '', 採点の観点: '', 必須: true, 問題番号: '' }, over);
@@ -82,6 +82,39 @@ test('裏方の Questions から試験作成の行へ戻せる（既存データ
 });
 
 test('検証メッセージの英語の列名を、試験作成シートの列名にする', () => {
-  assert.equal(toTeacherMessage('ERROR: Q004 pointsは0以上の整数で入力してください。'), 'ERROR: Q004 配点は0以上の整数で入力してください。');
-  assert.equal(toTeacherMessage('ERROR: Q005 MULTIPLE_CHOICEなのにoptionsがありません。'), 'ERROR: Q005 MULTIPLE_CHOICEなのに選択肢がありません。');
+  assert.equal(toTeacherMessage('ERROR: Q004 pointsは0以上の整数で入力してください。'), '・Q004 配点は0以上の整数で入力してください。');
+  assert.equal(toTeacherMessage('ERROR: Q005 MULTIPLE_CHOICEなのにoptionsがありません。'), '・Q005 選択なのに選択肢がありません。');
+});
+
+test('検証メッセージに英語の言葉を残さない', () => {
+  const msgs = [
+    'ERROR: 有効な問題がありません。Questionsシートで enabled を TRUE にした問題を入力してください。',
+    'ERROR: Q001 NUMBERなのにcorrect_answerが数値ではありません。',
+    'ERROR: Q001 NATIVEは選択式（MULTIPLE_CHOICE/CHECKBOX/DROPDOWN）の問題でだけ使えます。',
+    'ERROR: Settings LLM_MODELが未設定です'
+  ];
+  msgs.map(toTeacherMessage).forEach((m) => {
+    assert.ok(!/ERROR|Questions|enabled|TRUE|NUMBER|NATIVE|MULTIPLE_CHOICE|correct_answer/.test(m), m);
+  });
+});
+
+test('番号は形に関係なく保つ（001 や q1 も付け替えない）', () => {
+  assert.deepEqual(assignQuestionIds([row({ 問題番号: '001' }), row({ 問題番号: 'q1' }), row()], ['001', 'q1']), ['001', 'q1', 'Q001']);
+});
+
+test('999番の次は Q1000（重ならない）', () => {
+  assert.deepEqual(assignQuestionIds([row()], ['Q999']), ['Q1000']);
+});
+
+test('裏方だけの設定を同じ問題番号から引き継ぎ、消えた問題は掲載なしで残す', () => {
+  const fresh = toQuestionRows([row({ 問題番号: 'Q001' }), row({ 問題番号: 'Q002', 種類: '記述' })]).rows;
+  const existing = [
+    { question_id: 'Q001', question_type: 'SHORT_TEXT', auto_rule: 'CONTAINS', grading_mode: 'AUTO', section: '基礎', feedback_correct: 'よし', feedback_incorrect: '' },
+    { question_id: 'Q002', question_type: 'PARAGRAPH', grading_mode: 'LLM', rubric_id: 'R1', section: '' },
+    { question_id: 'Q009', question_type: 'SHORT_TEXT', grading_mode: 'AUTO', enabled: true, question_text: '消えた問題' }
+  ];
+  const merged = mergeWithExisting(fresh, existing);
+  assert.deepEqual([merged[0].auto_rule, merged[0].section, merged[0].feedback_correct], ['CONTAINS', '基礎', 'よし']);
+  assert.deepEqual([merged[1].grading_mode, merged[1].rubric_id], ['LLM', 'R1']);
+  assert.deepEqual([merged[2].question_id, merged[2].enabled, merged[2].question_text], ['Q009', false, '消えた問題']);
 });

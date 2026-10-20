@@ -28,7 +28,10 @@ function setControl(key, value) {
   ss.getSheetByName(SHEET_NAMES.CONTROL).getRange(CONTROL_CELLS[key]).setValue(value);
   // 先生が見る試験作成シートにも同じ表示を出す
   var authoring = ss.getSheetByName(SHEET_NAMES.AUTHORING);
-  if (authoring && AUTHORING_CELLS[key]) authoring.getRange(AUTHORING_CELLS[key]).setValue(value);
+  if (authoring && AUTHORING_CELLS[key]) {
+    var shown = key === 'STATUS' ? (AUTHORING_STATUS_LABELS[value] || value) : value;
+    authoring.getRange(AUTHORING_CELLS[key]).setValue(shown);
+  }
 }
 
 function setSetting(key, value) {

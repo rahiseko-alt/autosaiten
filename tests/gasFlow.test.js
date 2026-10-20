@@ -65,7 +65,7 @@ test('不備があれば ERROR になり、全件が MESSAGE に出て、チェ�
   env.ctx.setupSystem();
   const range = pressOk(env);
   assert.equal(control(env, 'STATUS'), 'ERROR');
-  assert.ok(String(control(env, 'MESSAGE')).includes('有効な問題がありません'));
+  assert.ok(String(control(env, 'MESSAGE')).includes('表に問題がありません'));
   assert.equal(range.getValue(), false);
 });
 
@@ -84,7 +84,7 @@ test('状態・メッセージ・フォームURL・合計点は、試験作成�
   const env = prepare();
   pressOk(env);
   const a = env.ss.getSheetByName('試験作成');
-  assert.equal(a.getRange('B3').getValue(), 'READY');
+  assert.equal(a.getRange('B3').getValue(), '準備完了');
   assert.ok(String(a.getRange('B5').getValue()).startsWith('https://forms.example/'));
   assert.equal(a.getRange('B6').getValue(), 10);
 });
@@ -106,7 +106,7 @@ test('種類が不正なら、試験作成シートに行番号つきで出る',
   const env = prepare({}, [A('首都は？', 'なぞ', 5, '東京')]);
   pressOk(env);
   const a = env.ss.getSheetByName('試験作成');
-  assert.equal(a.getRange('B3').getValue(), 'ERROR');
+  assert.equal(a.getRange('B3').getValue(), 'エラー');
   assert.ok(String(a.getRange('B4').getValue()).includes('11行目'));
 });
 
@@ -127,7 +127,7 @@ test('初期セットアップで試験作成と結果のシートが前に並�
   ['Control', 'Questions', 'Rubrics', 'Settings', 'Results', 'Queue', 'FormMapping', 'Logs']
     .forEach((n) => assert.equal(env.ss.getSheetByName(n).isSheetHidden(), true, n));
   assert.equal(env.ss.getSheetByName('試験作成').isSheetHidden(), false);
-  assert.ok(String(env.ss.getSheetByName('結果').cell(2, 1)).startsWith('=IFERROR(FILTER('));
+  assert.ok(String(env.ss.getSheetByName('結果').cell(2, 1)).startsWith('=IFNA(FILTER({Results!C2:C,Results!D2:D,Results!E2:E,Results!F2:F,Results!G2:G,Results!L2:L,Results!M2:M,'));
 });
 
 test('既に Questions にある問題は、初めて試験作成シートを作るときに引っ越す', () => {
@@ -231,4 +231,56 @@ test('= で始まる回答も、加工されずに Results へ渡される（文
   env.ctx.processGradingQueue();
   const results = env.ss.getSheetByName('Results');
   assert.ok([2, 3].map((r) => results.cell(r, 7)).includes('=1+1'));
+});
+
+test('表が空のまま押しても、裏方の Questions は消えない', () => {
+  const env = prepare();
+  pressOk(env);
+  const a = env.ss.getSheetByName('試験作成');
+  for (let r = 11; r <= 12; r++) for (let c = 1; c <= 10; c++) a.put(r, c, '');
+  pressOk(env);
+  assert.equal(control(env, 'STATUS'), 'ERROR');
+  assert.equal(env.ss.getSheetByName('Questions').cell(2, 2), 'Q001');
+});
+
+test('不備があるときは、裏方の Questions を書き換えない', () => {
+  const env = prepare();
+  pressOk(env);
+  const a = env.ss.getSheetByName('試験作成');
+  a.put(11, 5, '大阪'); a.put(12, 4, -1);
+  pressOk(env);
+  assert.equal(control(env, 'STATUS'), 'ERROR');
+  assert.equal(env.ss.getSheetByName('Questions').cell(2, 10), '東京');
+});
+
+test('設定検証のメニューは、裏方の Questions を書き換えない', () => {
+  const env = prepare();
+  pressOk(env);
+  env.ss.getSheetByName('試験作成').put(11, 5, '大阪');
+  env.ctx.menuValidate();
+  assert.equal(env.ss.getSheetByName('Questions').cell(2, 10), '東京');
+});
+
+test('行を消した問題も、その版の答案では採点される', () => {
+  const env = prepare();
+  pressOk(env);
+  env.forms.form1.submit({ '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  const a = env.ss.getSheetByName('試験作成');
+  a.rows.splice(11, 1); // Q002 の行を消す
+  pressOk(env);
+  env.ctx.processGradingQueue();
+  const results = env.ss.getSheetByName('Results');
+  const ids = [2, 3].map((r) => results.cell(r, 5)).sort();
+  assert.deepEqual(ids, ['Q001', 'Q002']);
+  const q = env.ss.getSheetByName('Questions');
+  assert.ok([2, 3].some((r) => q.cell(r, 2) === 'Q002' && q.cell(r, 1) === false));
+});
+
+test('試験作成と結果を手で隠していても、セットアップをやり直せる', () => {
+  const env = createGasContext();
+  env.ctx.setupSystem();
+  env.ss.getSheetByName('試験作成').hideSheet();
+  env.ss.getSheetByName('結果').hideSheet();
+  env.ctx.setupSystem();
+  assert.equal(env.ss.getSheetByName('試験作成').isSheetHidden(), false);
 });

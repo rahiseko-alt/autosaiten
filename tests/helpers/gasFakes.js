@@ -46,6 +46,7 @@ class FakeSheet {
   }
   getProtections() { return []; }
   hideSheet() { this.hidden = true; return this; }
+  showSheet() { this.hidden = false; return this; }
   isSheetHidden() { return !!this.hidden; }
   setConditionalFormatRules(rules) { this.conditionalRules = rules; }
   getConditionalFormatRules() { return this.conditionalRules || []; }

@@ -29,25 +29,24 @@ function runBuildFlow_() {
   try {
     setControl('STATUS', 'VALIDATING');
     setControl('MESSAGE', '設定を確認しています');
-    var syncErrors = syncAuthoringToBackend_();
-    if (syncErrors.length > 0) {
-      setControl('STATUS', 'ERROR');
-      setControl('MESSAGE', syncErrors.join('\n'));
-      writeLog('WARN', 'BUILD_FAILED', '', '試験作成シートの内容にエラーがありました', { count: syncErrors.length });
-      return;
+    var prepared = prepareAuthoring_();
+    var questions = prepared ? prepared.questions : readTable(SHEET_NAMES.QUESTIONS);
+    var errors = prepared ? prepared.errors.slice() : [];
+    if (errors.length === 0) {
+      errors = validateConfiguration({
+        questions: questions,
+        rubrics: readTable(SHEET_NAMES.RUBRICS),
+        settings: readSettings()
+      }).map(toTeacherMessage);
     }
-    var questions = readTable(SHEET_NAMES.QUESTIONS);
-    var errors = validateConfiguration({
-      questions: questions,
-      rubrics: readTable(SHEET_NAMES.RUBRICS),
-      settings: readSettings()
-    });
     if (errors.length > 0) {
+      // 不備があるときは裏方の Questions を書き換えない（採点中の答案に影響させない）
       setControl('STATUS', 'ERROR');
-      setControl('MESSAGE', errors.map(toTeacherMessage).join('\n'));
+      setControl('MESSAGE', errors.join('\n'));
       writeLog('WARN', 'BUILD_FAILED', '', '設定の検証でエラーがありました', { count: errors.length });
       return;
     }
+    if (prepared) commitAuthoring_(prepared);
 
     setControl('STATUS', 'BUILDING');
     setControl('MESSAGE', 'フォームを作っています');
@@ -56,11 +55,11 @@ function runBuildFlow_() {
     installRequiredTriggers();
     updateControlSummary(questions);
     setControl('STATUS', 'READY');
-    setControl('MESSAGE', '準備ができました。FORM_URL を学生に配布してください');
+    setControl('MESSAGE', '準備ができました。フォームURLを学生に配ってください');
     writeLog('INFO', 'BUILD_COMPLETED', '', 'フォーム生成が完了しました');
   } catch (err) {
     setControl('STATUS', 'ERROR');
-    setControl('MESSAGE', '処理中に問題が起きました。導入担当者に連絡してください（詳細は Logs シート）');
+    setControl('MESSAGE', '処理中に問題が起きました。' + (err && /^[^A-Za-z]/.test(err.message) ? err.message : '導入担当者に連絡してください（詳細は裏方の記録 Logs に残っています）'));
     writeLog('ERROR', 'BUILD_FAILED', '', String(err && err.message), { stack: String(err && err.stack) });
   }
 }
