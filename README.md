@@ -34,6 +34,19 @@
 - 注意: 回答が残っている旧版の採点が終わるまでは、Questions の配点・正答を大きく変えないでください（採点は現在の Questions を使います）
 - 【未確認】回答先のスプレッドシートに「フォームの回答 N」シートが増える（版ごとに増える）
 
+
+### LLM 採点の準備（導入担当者向け）
+
+1. Anthropic で**この仕組み専用の API キー**を作り、提供元の画面で月額の上限を設ける
+2. Apps Script の「プロジェクトの設定 > スクリプト プロパティ」に `ANTHROPIC_API_KEY` として登録する（シートやリポジトリには書かない）
+3. Settings シートの `LLM_MODEL` に使うモデル名を入れる
+4. Apps Script エディタで `diagnoseAnthropic` を選んで実行し、「接続に成功しました」と出ることを確かめる
+
+- 【未確認】`diagnoseAnthropic` が成功する
+- 【未確認】LLM の問題が採点され、Results に提供元・モデル・版・理由・信頼度が入る
+- 【未確認】通信が失敗した問題は REVIEW_REQUIRED になり、0点にならない
+- 注意: `appsscript.json` の `urlFetchWhitelist` で、通信先を `https://api.anthropic.com/` だけに限っています。他社の提供元を足すときは、ここに追加が必要です
+
 ---
 
 # Matt2
