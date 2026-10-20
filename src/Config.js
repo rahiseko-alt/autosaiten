@@ -25,6 +25,22 @@ var SHEET_HEADERS = {
   Logs: ['timestamp', 'level', 'event', 'entity_id', 'message', 'details_json']
 };
 
+/** 必ず埋める列（見出しを黄色にする）。 */
+var REQUIRED_HEADERS = {
+  Questions: ['enabled', 'question_id', 'question_text', 'question_type', 'required', 'points', 'grading_mode'],
+  Rubrics: ['rubric_id', 'rubric_version', 'criterion_id', 'criterion', 'max_points']
+};
+
+/** 条件つきで埋める列（見出しを薄い橙にし、条件をメモで示す）。 */
+var CONDITIONAL_HEADERS = {
+  Questions: {
+    auto_rule: 'AUTO のとき必須',
+    correct_answer: 'AUTO のとき必須（CHECKBOX は || 区切り、CONTAINS はキーワードを || 区切り）',
+    options: '選択式（MULTIPLE_CHOICE・CHECKBOX・DROPDOWN）のとき必須。|| 区切り',
+    rubric_id: 'LLM のとき必須（MANUAL では任意。採点の基準として使う）'
+  }
+};
+
 var CONTROL_CELLS = {
   OK: 'B2', STATUS: 'B4', MESSAGE: 'B5', FORM_URL: 'B6', EDIT_URL: 'B7', FORM_VERSION: 'B8',
   LAST_BUILD: 'B9', TOTAL_QUESTIONS: 'B10', TOTAL_POINTS: 'B11', AUTO_POINTS: 'B12',

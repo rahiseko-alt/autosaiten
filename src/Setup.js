@@ -29,6 +29,14 @@ function setupSystem() {
 function writeHeader_(sheet, headers) {
   sheet.getRange(1, 1, 1, headers.length).setValues([headers])
     .setFontWeight('bold').setBackground('#d9eaff');
+  var name = sheet.getName();
+  var required = REQUIRED_HEADERS[name] || [];
+  var conditional = CONDITIONAL_HEADERS[name] || {};
+  headers.forEach(function (h, i) {
+    var cell = sheet.getRange(1, i + 1);
+    if (required.indexOf(h) >= 0) cell.setBackground('#ffff00');
+    if (conditional[h]) cell.setBackground('#fce5cd').setNote(conditional[h]);
+  });
   sheet.setFrozenRows(1);
 }
 

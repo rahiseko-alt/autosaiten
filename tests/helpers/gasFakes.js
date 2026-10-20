@@ -71,7 +71,9 @@ class FakeRange {
     return this;
   }
 }
-['setDataValidation', 'setNumberFormat', 'setFontWeight', 'setBackground', 'setFontSize', 'setWrap'].forEach((m) => {
+FakeRange.prototype.setBackground = function (c) { (this.sheet.backgrounds = this.sheet.backgrounds || {})[this.getA1Notation()] = c; return this; };
+FakeRange.prototype.setNote = function (n) { (this.sheet.notes = this.sheet.notes || {})[this.getA1Notation()] = n; return this; };
+['setDataValidation', 'setNumberFormat', 'setFontWeight', 'setFontSize', 'setWrap'].forEach((m) => {
   FakeRange.prototype[m] = function () { return this; };
 });
 
