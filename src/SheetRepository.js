@@ -24,7 +24,23 @@ function readSettings() {
 }
 
 function setControl(key, value) {
-  SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.CONTROL).getRange(CONTROL_CELLS[key]).setValue(value);
+  var ss = SpreadsheetApp.getActive();
+  ss.getSheetByName(SHEET_NAMES.CONTROL).getRange(CONTROL_CELLS[key]).setValue(value);
+  // 先生が見る試験作成シートにも同じ表示を出す
+  var authoring = ss.getSheetByName(SHEET_NAMES.AUTHORING);
+  if (authoring && AUTHORING_CELLS[key]) authoring.getRange(AUTHORING_CELLS[key]).setValue(value);
+}
+
+function setSetting(key, value) {
+  var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.SETTINGS);
+  var keys = sheet.getRange(1, 1, Math.max(1, sheet.getLastRow()), 1).getValues();
+  for (var r = 1; r < keys.length; r++) {
+    if (keys[r][0] === key) {
+      sheet.getRange(r + 1, 2).setValue(value);
+      return;
+    }
+  }
+  sheet.appendRow([key, value, '']);
 }
 
 function getControl(key) {

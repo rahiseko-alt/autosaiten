@@ -2,31 +2,21 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createGasContext } = require('./helpers/gasFakes.js');
 
-function llmResponse() {
-  const body = JSON.stringify({ content: [{ type: 'tool_use', name: 'submit_grades', input: { results: [
-    { question_id: 'Q003', score: 9, max_score: 10, confidence: 0.9, reason: 'よい', criteria: [{ criterion_id: 'C01', score: 9 }] }
-  ] } }] });
-  return { getResponseCode: () => 200, getContentText: () => body };
+function fillAuthoring(env, rows) {
+  const sheet = env.ss.getSheetByName('試験作成');
+  rows.forEach((row, i) => row.forEach((v, c) => sheet.put(11 + i, c + 1, v)));
 }
 
-function fillSheet(env, name, rows) {
-  const sheet = env.ss.getSheetByName(name);
-  rows.forEach((row, i) => row.forEach((v, c) => sheet.put(i + 2, c + 1, v)));
-}
+const A = (text, kind, points, correct, alt, options, viewpoint) =>
+  [true, text, kind, points, correct || '', alt || '', options || '', viewpoint || '', true, ''];
 
-function prepare(over) {
-  const env = createGasContext(Object.assign({ scriptProperties: { ANTHROPIC_API_KEY: 'sk-test' }, fetch: () => llmResponse() }, over));
+function prepare(over, rows) {
+  const env = createGasContext(over);
   env.ctx.setupSystem();
-  const q = (id, text, type, points, mode, rule, correct, alt, opts, rubric) =>
-    [true, id, '基礎', text, type, true, points, mode, rule, correct, alt, '', opts, rubric, '', '', ''];
-  fillSheet(env, 'Questions', [
-    q('Q001', '日本の首都は？', 'SHORT_TEXT', 5, 'AUTO', 'ANY_OF', '東京', '東京都', '', ''),
-    q('Q002', '4PのPriceを選べ', 'MULTIPLE_CHOICE', 5, 'AUTO', 'NATIVE', 'Price', '', 'Product||Price||Place', ''),
-    q('Q003', '理由を説明せよ', 'PARAGRAPH', 10, 'LLM', '', '', '', '', 'R001')
+  fillAuthoring(env, rows || [
+    A('日本の首都は？', '短答', 5, '東京', '東京都'),
+    A('4PのPriceを選べ', '選択', 5, 'Price', '', 'Product||Price||Place')
   ]);
-  fillSheet(env, 'Rubrics', [['R001', 1, 'C01', '理由', 10, '説明できている', true, '']]);
-  const settings = env.ss.getSheetByName('Settings');
-  for (let r = 2; r <= 12; r++) if (settings.cell(r, 1) === 'LLM_MODEL') settings.put(r, 2, 'test-model');
   return env;
 }
 
@@ -36,7 +26,7 @@ function control(env, key) {
 }
 
 function pressOk(env) {
-  const range = env.ss.getSheetByName('Control').getRange('B2');
+  const range = env.ss.getSheetByName('試験作成').getRange('B2');
   range.setValue(true);
   env.ctx.handleControlEdit({ range });
   return range;
@@ -85,10 +75,69 @@ test('「これでOK」でフォームができ、READY になり、対応表と
   assert.equal(control(env, 'STATUS'), 'READY', control(env, 'MESSAGE'));
   assert.ok(String(control(env, 'FORM_URL')).startsWith('https://forms.example/'));
   assert.equal(control(env, 'FORM_VERSION'), 1);
-  assert.equal(control(env, 'TOTAL_POINTS'), 20);
-  const mapping = env.ss.getSheetByName('FormMapping');
-  assert.equal(mapping.getLastRow(), 4); // 見出し + 3問（セクション見出しは対象外）
+  assert.equal(control(env, 'TOTAL_POINTS'), 10);
+  assert.equal(env.ss.getSheetByName('FormMapping').getLastRow(), 3);
   assert.equal(Object.keys(env.forms).length, 1);
+});
+
+test('状態・メッセージ・フォームURL・合計点は、試験作成シートにも出る', () => {
+  const env = prepare();
+  pressOk(env);
+  const a = env.ss.getSheetByName('試験作成');
+  assert.equal(a.getRange('B3').getValue(), 'READY');
+  assert.ok(String(a.getRange('B5').getValue()).startsWith('https://forms.example/'));
+  assert.equal(a.getRange('B6').getValue(), 10);
+});
+
+test('問題番号が自動で付き、並べ替えても行についたまま', () => {
+  const env = prepare();
+  pressOk(env);
+  const a = env.ss.getSheetByName('試験作成');
+  assert.deepEqual([a.cell(11, 10), a.cell(12, 10)], ['Q001', 'Q002']);
+  // 行を入れ替える
+  const r11 = a.rows[10].slice(); a.rows[10] = a.rows[11].slice(); a.rows[11] = r11;
+  pressOk(env);
+  assert.deepEqual([a.cell(11, 10), a.cell(12, 10)], ['Q002', 'Q001']);
+  const q = env.ss.getSheetByName('Questions');
+  assert.deepEqual([q.cell(2, 2), q.cell(3, 2)], ['Q002', 'Q001']);
+});
+
+test('種類が不正なら、試験作成シートに行番号つきで出る', () => {
+  const env = prepare({}, [A('首都は？', 'なぞ', 5, '東京')]);
+  pressOk(env);
+  const a = env.ss.getSheetByName('試験作成');
+  assert.equal(a.getRange('B3').getValue(), 'ERROR');
+  assert.ok(String(a.getRange('B4').getValue()).includes('11行目'));
+});
+
+test('フォームのタイトルと説明は、試験作成シートの欄から反映される', () => {
+  const env = prepare();
+  const a = env.ss.getSheetByName('試験作成');
+  a.put(7, 2, '期末テスト'); a.put(8, 2, '資料はこちら');
+  pressOk(env);
+  const settings = env.ctx.readSettings();
+  assert.deepEqual([settings.FORM_TITLE, settings.FORM_DESCRIPTION], ['期末テスト', '資料はこちら']);
+});
+
+test('初期セットアップで試験作成と結果のシートが前に並び、裏方のシートは隠れる', () => {
+  const env = createGasContext();
+  env.ctx.setupSystem();
+  const names = env.ss.getSheets().map((s) => s.name);
+  assert.deepEqual(names.slice(0, 2), ['試験作成', '結果']);
+  ['Control', 'Questions', 'Rubrics', 'Settings', 'Results', 'Queue', 'FormMapping', 'Logs']
+    .forEach((n) => assert.equal(env.ss.getSheetByName(n).isSheetHidden(), true, n));
+  assert.equal(env.ss.getSheetByName('試験作成').isSheetHidden(), false);
+  assert.ok(String(env.ss.getSheetByName('結果').cell(2, 1)).startsWith('=IFERROR(FILTER('));
+});
+
+test('既に Questions にある問題は、初めて試験作成シートを作るときに引っ越す', () => {
+  const env = createGasContext();
+  const q = env.ss.insertSheet('Questions');
+  [true, 'Q005', '', '説明せよ', 'PARAGRAPH', true, 20, 'MANUAL', '', '', '', '', '', '', '', '', '観点メモ']
+    .forEach((v, c) => q.put(2, c + 1, v));
+  env.ctx.setupSystem();
+  const a = env.ss.getSheetByName('試験作成');
+  assert.deepEqual([a.cell(11, 2), a.cell(11, 3), a.cell(11, 4), a.cell(11, 8), a.cell(11, 10)], ['説明せよ', '記述', 20, '観点メモ', 'Q005']);
 });
 
 test('何も変えずにもう一度押しても、フォームも版も増えない', () => {
@@ -103,7 +152,7 @@ test('回答が1件ある状態で問題を変えると、新しい版ができ�
   const env = prepare();
   pressOk(env);
   env.forms.form1.submit({ '日本の首都は？': '東京' });
-  env.ss.getSheetByName('Questions').put(2, 4, '日本の首都はどこですか？');
+  env.ss.getSheetByName('試験作成').put(11, 2, '日本の首都はどこですか？');
   pressOk(env);
   assert.equal(control(env, 'STATUS'), 'READY', control(env, 'MESSAGE'));
   assert.equal(control(env, 'FORM_VERSION'), 2);
@@ -114,83 +163,72 @@ test('回答が1件ある状態で問題を変えると、新しい版ができ�
 test('回答が無いフォームは、同じフォームのまま同期される', () => {
   const env = prepare();
   pressOk(env);
-  env.ss.getSheetByName('Questions').put(2, 4, '首都は？');
+  env.ss.getSheetByName('試験作成').put(11, 2, '首都は？');
   pressOk(env);
   assert.equal(Object.keys(env.forms).length, 1);
   assert.equal(control(env, 'FORM_VERSION'), 1);
-  assert.equal(env.ss.getSheetByName('FormMapping').getLastRow(), 4);
+  assert.equal(env.ss.getSheetByName('FormMapping').getLastRow(), 3);
+});
+
+test('掲載を外した問題はフォームに載らない', () => {
+  const env = prepare();
+  env.ss.getSheetByName('試験作成').put(12, 1, false);
+  pressOk(env);
+  assert.equal(env.forms.form1.items.filter((i) => i.kind !== 'SECTION').length, 1);
 });
 
 test('送信から採点・確定・フォームへの書き戻しまで通る', () => {
   const env = prepare();
   pressOk(env);
-  env.forms.form1.submit({ '日本の首都は？': '東京都', '4PのPriceを選べ': 'Price', '理由を説明せよ': '顧客ごとに違うから' });
+  env.forms.form1.submit({ '日本の首都は？': '東京都', '4PのPriceを選べ': 'Price' });
   env.ctx.processGradingQueue();
 
   const results = env.ss.getSheetByName('Results');
-  assert.equal(results.getLastRow(), 4);
+  assert.equal(results.getLastRow(), 3);
   const byQ = {};
-  for (let r = 2; r <= 4; r++) byQ[results.cell(r, 5)] = { final: results.cell(r, 12), status: results.cell(r, 14) };
+  for (let r = 2; r <= 3; r++) byQ[results.cell(r, 5)] = { final: results.cell(r, 12), status: results.cell(r, 14) };
   assert.deepEqual(byQ.Q001, { final: 5, status: 'AUTO_GRADED' });
   assert.deepEqual(byQ.Q002, { final: 5, status: 'AUTO_GRADED' });
-  assert.deepEqual(byQ.Q003, { final: 9, status: 'LLM_GRADED' });
-
-  const queue = env.ss.getSheetByName('Queue');
-  assert.equal(queue.getLastRow(), 2);
-  assert.equal(queue.cell(2, 5), 'COMPLETED');
-
+  assert.equal(env.ss.getSheetByName('Queue').cell(2, 5), 'COMPLETED');
   assert.equal(env.forms.form1.submitted.length, 1);
-  const grades = env.forms.form1.submitted[0][0].grades.map((g) => g.score).sort();
-  assert.deepEqual(grades, [5, 5, 9]);
+  assert.deepEqual(env.forms.form1.submitted[0][0].grades.map((g) => g.score), [5, 5]);
 });
 
 test('もう一度処理しても、Queue・Results・書き戻しが増えない', () => {
   const env = prepare();
   pressOk(env);
-  env.forms.form1.submit({ '日本の首都は？': '東京', '4PのPriceを選べ': 'Price', '理由を説明せよ': '回答' });
+  env.forms.form1.submit({ '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
   env.ctx.processGradingQueue();
   env.ctx.processGradingQueue();
   assert.equal(env.ss.getSheetByName('Queue').getLastRow(), 2);
-  assert.equal(env.ss.getSheetByName('Results').getLastRow(), 4);
+  assert.equal(env.ss.getSheetByName('Results').getLastRow(), 3);
   assert.equal(env.forms.form1.submitted.length, 1);
 });
 
-test('MANUAL が残る回答は書き戻されず、manual_score を入れて反映すると確定する', () => {
-  const env = prepare();
-  const questions = env.ss.getSheetByName('Questions');
-  questions.put(4, 8, 'MANUAL'); questions.put(4, 14, '');
+test('記述は書き戻されず、manual_score を入れて反映すると確定する', () => {
+  const env = prepare({}, [
+    A('日本の首都は？', '短答', 5, '東京'),
+    A('理由を説明せよ', '記述', 10, '模範解答', '', '', '理由が書けていれば10点')
+  ]);
   pressOk(env);
   assert.equal(control(env, 'STATUS'), 'READY', control(env, 'MESSAGE'));
-  env.forms.form1.submit({ '日本の首都は？': '東京', '4PのPriceを選べ': 'Price', '理由を説明せよ': '回答' });
+  env.forms.form1.submit({ '日本の首都は？': '東京', '理由を説明せよ': '回答' });
   env.ctx.processGradingQueue();
   assert.equal(env.forms.form1.submitted.length, 0);
   assert.equal(env.ss.getSheetByName('Queue').cell(2, 5), 'REVIEW_REQUIRED');
 
   const results = env.ss.getSheetByName('Results');
-  for (let r = 2; r <= 4; r++) if (results.cell(r, 5) === 'Q003') results.put(r, 11, 7);
+  for (let r = 2; r <= 3; r++) if (results.cell(r, 5) === 'Q002') results.put(r, 11, 7);
   env.ctx.finalizeManualGrades();
   assert.equal(env.forms.form1.submitted.length, 1);
   assert.equal(env.ss.getSheetByName('Queue').cell(2, 5), 'COMPLETED');
 });
 
-test('LLM の通信が失敗した回答は再試行になり、0点にならない', () => {
-  const env = prepare({ fetch: () => ({ getResponseCode: () => 503, getContentText: () => '' }) });
-  pressOk(env);
-  env.forms.form1.submit({ '日本の首都は？': '東京', '4PのPriceを選べ': 'Price', '理由を説明せよ': '回答' });
-  env.ctx.processGradingQueue();
-  const queue = env.ss.getSheetByName('Queue');
-  assert.equal(queue.cell(2, 5), 'RETRY');
-  assert.equal(queue.cell(2, 6), 1);
-  assert.equal(env.ss.getSheetByName('Results').getLastRow(), 1); // 結果はまだ書かれない
-  assert.equal(env.forms.form1.submitted.length, 0);
-});
-
 test('= で始まる回答も、加工されずに Results へ渡される（文字の書式の指定は実環境で確認）', () => {
   const env = prepare();
   pressOk(env);
-  env.forms.form1.submit({ '日本の首都は？': '=1+1', '4PのPriceを選べ': 'Price', '理由を説明せよ': '回答' });
+  env.forms.form1.submit({ '日本の首都は？': '=1+1', '4PのPriceを選べ': 'Price' });
   env.ctx.processGradingQueue();
   const results = env.ss.getSheetByName('Results');
-  const answers = [2, 3, 4].map((r) => results.cell(r, 7));
-  assert.ok(answers.includes('=1+1'));
+  assert.ok([2, 3].map((r) => results.cell(r, 7)).includes('=1+1'));
 });

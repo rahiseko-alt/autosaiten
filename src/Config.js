@@ -4,11 +4,28 @@
  */
 
 var SHEET_NAMES = {
+  AUTHORING: '試験作成', RESULTS_VIEW: '結果',
   CONTROL: 'Control', QUESTIONS: 'Questions', RUBRICS: 'Rubrics', SETTINGS: 'Settings',
   RESULTS: 'Results', QUEUE: 'Queue', FORM_MAPPING: 'FormMapping', LOGS: 'Logs'
 };
 
 var INTERNAL_SHEETS = [SHEET_NAMES.QUEUE, SHEET_NAMES.FORM_MAPPING, SHEET_NAMES.LOGS];
+
+/** 先生には見せない裏方のシート（ADR 0007）。 */
+var BACKEND_SHEETS = [SHEET_NAMES.CONTROL, SHEET_NAMES.QUESTIONS, SHEET_NAMES.RUBRICS, SHEET_NAMES.SETTINGS,
+  SHEET_NAMES.RESULTS, SHEET_NAMES.QUEUE, SHEET_NAMES.FORM_MAPPING, SHEET_NAMES.LOGS];
+
+/** 試験作成シートの上部のセル。表は AUTHORING_HEADER_ROW 行目が見出し。 */
+var AUTHORING_CELLS = {
+  OK: 'B2', STATUS: 'B3', MESSAGE: 'B4', FORM_URL: 'B5', TOTAL_POINTS: 'B6',
+  FORM_TITLE: 'B7', FORM_DESCRIPTION: 'B8'
+};
+var AUTHORING_LABELS = [
+  ['試験作成', ''], ['これでOK', false], ['状態', 'IDLE'],
+  ['メッセージ', '下の表に問題を書いてから、「これでOK」にチェックしてください'],
+  ['フォームURL（学生に配る）', ''], ['合計点', ''], ['フォームのタイトル', ''], ['フォームの説明', '']
+];
+var AUTHORING_HEADER_ROW = 10;
 
 var SHEET_HEADERS = {
   Questions: ['enabled', 'question_id', 'section', 'question_text', 'question_type', 'required', 'points',

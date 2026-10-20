@@ -22,6 +22,11 @@ function setupSystem() {
   setupMissingInputHighlights_(ss);
   INTERNAL_SHEETS.forEach(function (name) { protectInternal_(ss.getSheetByName(name)); });
 
+  var authoring = setupAuthoringSheet_(ss);
+  setupResultsView_(ss);
+  ss.setActiveSheet(authoring);
+  hideBackendSheets_(ss);
+
   installRequiredTriggers();
   writeLog('INFO', 'SETUP_COMPLETED', '', '初期セットアップが完了しました');
   ss.toast('初期セットアップが完了しました。API キーは Script Properties に別途設定してください。', 'AI Grader', 8);

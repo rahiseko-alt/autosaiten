@@ -16,13 +16,19 @@ function onOpen() {
 }
 
 function menuValidate() {
+  var syncErrors = syncAuthoringToBackend_();
+  if (syncErrors.length > 0) {
+    setControl('STATUS', 'ERROR');
+    setControl('MESSAGE', syncErrors.join('\n'));
+    return;
+  }
   var errors = validateConfiguration({
     questions: readTable(SHEET_NAMES.QUESTIONS),
     rubrics: readTable(SHEET_NAMES.RUBRICS),
     settings: readSettings()
   });
   setControl('STATUS', errors.length > 0 ? 'ERROR' : 'IDLE');
-  setControl('MESSAGE', errors.length > 0 ? errors.join('\n') : '設定に問題はありません');
+  setControl('MESSAGE', errors.length > 0 ? errors.map(toTeacherMessage).join('\n') : '設定に問題はありません');
 }
 
 function menuBuildForm() {

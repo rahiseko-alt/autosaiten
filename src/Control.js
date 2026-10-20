@@ -5,7 +5,10 @@
 function handleControlEdit(e) {
   if (!e || !e.range) return;
   var sheet = e.range.getSheet();
-  if (sheet.getName() !== SHEET_NAMES.CONTROL || e.range.getA1Notation() !== CONTROL_CELLS.OK) return;
+  var a1 = e.range.getA1Notation();
+  var isOk = (sheet.getName() === SHEET_NAMES.AUTHORING && a1 === AUTHORING_CELLS.OK) ||
+    (sheet.getName() === SHEET_NAMES.CONTROL && a1 === CONTROL_CELLS.OK);
+  if (!isOk) return;
   if (e.range.getValue() !== true) return;
 
   var lock = LockService.getDocumentLock();
@@ -26,6 +29,13 @@ function runBuildFlow_() {
   try {
     setControl('STATUS', 'VALIDATING');
     setControl('MESSAGE', '設定を確認しています');
+    var syncErrors = syncAuthoringToBackend_();
+    if (syncErrors.length > 0) {
+      setControl('STATUS', 'ERROR');
+      setControl('MESSAGE', syncErrors.join('\n'));
+      writeLog('WARN', 'BUILD_FAILED', '', '試験作成シートの内容にエラーがありました', { count: syncErrors.length });
+      return;
+    }
     var questions = readTable(SHEET_NAMES.QUESTIONS);
     var errors = validateConfiguration({
       questions: questions,
@@ -34,7 +44,7 @@ function runBuildFlow_() {
     });
     if (errors.length > 0) {
       setControl('STATUS', 'ERROR');
-      setControl('MESSAGE', errors.join('\n'));
+      setControl('MESSAGE', errors.map(toTeacherMessage).join('\n'));
       writeLog('WARN', 'BUILD_FAILED', '', '設定の検証でエラーがありました', { count: errors.length });
       return;
     }

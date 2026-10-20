@@ -45,6 +45,8 @@ class FakeSheet {
     return new FakeRange(this, a, b, c || 1, d || 1);
   }
   getProtections() { return []; }
+  hideSheet() { this.hidden = true; return this; }
+  isSheetHidden() { return !!this.hidden; }
   setConditionalFormatRules(rules) { this.conditionalRules = rules; }
   getConditionalFormatRules() { return this.conditionalRules || []; }
   protect() { return noop(); }
@@ -62,6 +64,8 @@ class FakeRange {
     return this.nr === 1 && this.nc === 1 ? letter(this.col) + this.row : letter(this.col) + this.row + ':' + letter(this.col + this.nc - 1) + (this.row + this.nr - 1);
   }
   getValue() { return this.sheet.cell(this.row, this.col); }
+  setFormula(f) { this.sheet.put(this.row, this.col, f); return this; }
+  clearContent() { for (let r = 0; r < this.nr; r++) for (let c = 0; c < this.nc; c++) this.sheet.put(this.row + r, this.col + c, ''); return this; }
   setValue(v) { this.sheet.put(this.row, this.col, v); return this; }
   getValues() {
     const out = [];
@@ -87,7 +91,8 @@ class FakeSpreadsheet {
   insertSheet(n, i) { const s = new FakeSheet(n); this.sheets.splice(i === undefined ? this.sheets.length : i, 0, s); return s; }
   deleteSheet(s) { this.sheets = this.sheets.filter((x) => x !== s); }
   toast(m) { this.toasts.push(m); }
-  getActiveSheet() { return this.sheets[0]; }
+  getActiveSheet() { return this.active || this.sheets[0]; }
+  setActiveSheet(s) { this.active = s; return s; }
 }
 
 class FakeItem {
