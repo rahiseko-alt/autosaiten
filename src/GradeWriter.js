@@ -129,8 +129,8 @@ function finalizeManualGrades() {
     lock.releaseLock();
   }
   if (problems.length > 0) {
-    setControl('MESSAGE', 'Manual採点の反映で次の問題がありました:\n' + problems.join('\n'));
+    setControl('MESSAGE', '手動採点の反映で次の問題がありました:\n' + problems.join('\n'));
     writeLog('WARN', 'FINALIZE_PROBLEMS', '', problems.length + '件の問題がありました');
   }
-  SpreadsheetApp.getActive().toast(done + '件の回答を確定し、フォームへ反映しました' + (problems.length ? '（問題あり。Control を確認してください）' : ''), 'AI Grader', 8);
+  SpreadsheetApp.getActive().toast(done + '件の回答を確定し、フォームへ反映しました' + (problems.length ? '（問題あり。メッセージ欄を確認してください）' : ''), 'AI Grader', 8);
 }

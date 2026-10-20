@@ -5,7 +5,10 @@
 function handleControlEdit(e) {
   if (!e || !e.range) return;
   var sheet = e.range.getSheet();
-  if (sheet.getName() !== SHEET_NAMES.CONTROL || e.range.getA1Notation() !== CONTROL_CELLS.OK) return;
+  var a1 = e.range.getA1Notation();
+  var isOk = (sheet.getName() === SHEET_NAMES.AUTHORING && a1 === AUTHORING_CELLS.OK) ||
+    (sheet.getName() === SHEET_NAMES.CONTROL && a1 === CONTROL_CELLS.OK);
+  if (!isOk) return;
   if (e.range.getValue() !== true) return;
 
   var lock = LockService.getDocumentLock();
@@ -26,18 +29,24 @@ function runBuildFlow_() {
   try {
     setControl('STATUS', 'VALIDATING');
     setControl('MESSAGE', '設定を確認しています');
-    var questions = readTable(SHEET_NAMES.QUESTIONS);
-    var errors = validateConfiguration({
-      questions: questions,
-      rubrics: readTable(SHEET_NAMES.RUBRICS),
-      settings: readSettings()
-    });
+    var prepared = prepareAuthoring_();
+    var questions = prepared ? prepared.questions : readTable(SHEET_NAMES.QUESTIONS);
+    var errors = prepared ? prepared.errors.slice() : [];
+    if (errors.length === 0) {
+      errors = validateConfiguration({
+        questions: questions,
+        rubrics: readTable(SHEET_NAMES.RUBRICS),
+        settings: readSettings()
+      }).map(toTeacherMessage);
+    }
     if (errors.length > 0) {
+      // 不備があるときは裏方の Questions を書き換えない（採点中の答案に影響させない）
       setControl('STATUS', 'ERROR');
       setControl('MESSAGE', errors.join('\n'));
       writeLog('WARN', 'BUILD_FAILED', '', '設定の検証でエラーがありました', { count: errors.length });
       return;
     }
+    if (prepared) commitAuthoring_(prepared);
 
     setControl('STATUS', 'BUILDING');
     setControl('MESSAGE', 'フォームを作っています');
@@ -46,11 +55,11 @@ function runBuildFlow_() {
     installRequiredTriggers();
     updateControlSummary(questions);
     setControl('STATUS', 'READY');
-    setControl('MESSAGE', '準備ができました。FORM_URL を学生に配布してください');
+    setControl('MESSAGE', '準備ができました。フォームURLを学生に配ってください');
     writeLog('INFO', 'BUILD_COMPLETED', '', 'フォーム生成が完了しました');
   } catch (err) {
     setControl('STATUS', 'ERROR');
-    setControl('MESSAGE', '処理中に問題が起きました。導入担当者に連絡してください（詳細は Logs シート）');
+    setControl('MESSAGE', '処理中に問題が起きました。' + (err && /^[^A-Za-z]/.test(err.message) ? err.message : '導入担当者に連絡してください（詳細は裏方の記録 Logs に残っています）'));
     writeLog('ERROR', 'BUILD_FAILED', '', String(err && err.message), { stack: String(err && err.stack) });
   }
 }
