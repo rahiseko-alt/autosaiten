@@ -53,7 +53,7 @@ class FakeSheet {
   protect() { return noop(); }
   getActiveRange() { return this.getRange(1, 1); }
 }
-['setFrozenRows', 'setColumnWidth', 'setTabColor'].forEach((m) => { FakeSheet.prototype[m] = function () { return this; }; });
+['setFrozenRows', 'setColumnWidth', 'setTabColor', 'setRowHeightsForced'].forEach((m) => { FakeSheet.prototype[m] = function () { return this; }; });
 
 class FakeRange {
   constructor(sheet, row, col, nr, nc) { this.sheet = sheet; this.row = row; this.col = col; this.nr = nr; this.nc = nc; }
@@ -80,7 +80,7 @@ class FakeRange {
 }
 FakeRange.prototype.setBackground = function (c) { (this.sheet.backgrounds = this.sheet.backgrounds || {})[this.getA1Notation()] = c; return this; };
 FakeRange.prototype.setNote = function (n) { (this.sheet.notes = this.sheet.notes || {})[this.getA1Notation()] = n; return this; };
-['setDataValidation', 'setNumberFormat', 'setFontWeight', 'setFontSize', 'setWrap'].forEach((m) => {
+['setDataValidation', 'setNumberFormat', 'setFontWeight', 'setFontSize', 'setWrap', 'setWrapStrategy', 'setVerticalAlignment'].forEach((m) => {
   FakeRange.prototype[m] = function () { return this; };
 });
 
@@ -172,7 +172,7 @@ function createGasContext(options) {
     console,
     SpreadsheetApp: {
       getActive: () => ss, getActiveSpreadsheet: () => ss, getActiveSheet: () => ss.getActiveSheet(),
-      newDataValidation: () => noop(), newConditionalFormatRule: () => noop(), ProtectionType: { SHEET: 'SHEET' },
+      WrapStrategy: { CLIP: 'CLIP' }, newDataValidation: () => noop(), newConditionalFormatRule: () => noop(), ProtectionType: { SHEET: 'SHEET' },
       getUi: () => noop()
     },
     FormApp: {
