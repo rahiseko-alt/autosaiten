@@ -1,0 +1,21 @@
+# 役割表。乗り換えはこの表の書き換えだけで行う。
+#
+# 1行に1役割。1列目が役割名、2列目以降が担当の候補で、左から順に試す。
+# 担当は「道具:モデル名」。道具は claude / codex / gemini のいずれか。
+# 前の担当が使えない（未導入・未ログイン・使用上限）ときは、右隣の代わりの担当へ回る。
+# 各行の最後は必ず claude にする（他社が使えない単独モードでも全役割が埋まるように）。
+#
+# 【未確認】codex と gemini のモデル名が、月額プランの道具で選べる正しい名前かは
+# Windows での初回準備のときに確かめ、違えばここを書き換える。
+
+# 役割                担当の候補（左から優先）
+design                claude:claude-opus-5-5
+design-review-1       codex:gpt-6.1-sol        claude:claude-opus-5-5
+design-review-2       gemini:gemini-3.1-pro    claude:claude-sonnet-5-5
+implement-light       gemini:gemini-3.8-flash  codex:gpt-6.1-sol  claude:claude-sonnet-5-5
+implement-complex     codex:gpt-6.1-sol        claude:claude-opus-5-5
+final-review-1        claude:claude-opus-5-5
+final-review-2        codex:gpt-6.1-sol        claude:claude-sonnet-5-5
+fix-light             gemini:gemini-3.8-flash  codex:gpt-6.1-sol  claude:claude-sonnet-5-5
+fix-complex           codex:gpt-6.1-sol        claude:claude-opus-5-5
+fix-design            claude:claude-opus-5-5
