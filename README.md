@@ -9,10 +9,10 @@
 ## 教師の使い方（導入後）
 
 1. Questions シートに問題を入力する（採点方式は AUTO / LLM / MANUAL から選ぶ）
-2. LLM で採点する問題は、Rubrics シートに採点基準を入力する（基準の点数合計が配点と一致すること）
+2. 記述式の問題は、採点方式を MANUAL にして、Rubrics シートに採点基準を入力する。採点は会話の Claude が行う（`docs/GRADING_BY_CLAUDE.md`）。API で自動採点する LLM モードも残してあるが、既定では使わない
 3. Control の「これでOK」にチェックする。不備があれば MESSAGE に全件が日本語で出る
 4. 配る前に、フォームの設定で成績の公開を「後で」にする（送信直後に公開すると、未採点の記述式が 0 点に見えるため）。READY になったら FORM_URL を学生に配る
-5. 採点は自動で進む（約1分ごと）。Results で結果を見る。`REVIEW_REQUIRED` は教師の確認待ち
+5. 選択式・短答は自動で採点される（約1分ごと）。記述式は、Claude に「採点して」と頼む。Results で結果を見る。`REVIEW_REQUIRED` は教師の確認待ち
 6. 確認が要る問題や MANUAL の問題は、Results の `manual_score` に点を入れ、メニュー「AI Grader > Manual採点を反映」を実行する
 
 困ったときは、メニュー「AI Grader > システム診断」で状態を Control の MESSAGE に表示できます。
@@ -26,7 +26,7 @@
 
 Apps Script エディタでコードを直接直さないでください（正本は GitHub です。これは運用上の約束で、技術的に強制されてはいません）。
 
-### LLM 採点の準備
+### LLM 採点の準備（API を使う場合だけ。既定では不要）
 
 1. Anthropic で**この仕組み専用の API キー**を作り、提供元の画面で月額の上限を設ける
 2. Apps Script の「プロジェクトの設定 > スクリプト プロパティ」に `ANTHROPIC_API_KEY` として登録する（シートやリポジトリには書かない）
