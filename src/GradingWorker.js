@@ -140,12 +140,40 @@ function gradeJob_(job, settings) {
   });
 }
 
+/**
+ * 回答を採点し直す。過去の行は消さず更新し、教師が入れた manual_score は守る。
+ */
+function regradeResponse(responseId) {
+  var found = readQueueRows_().filter(function (j) { return j.job.response_id === responseId; })[0];
+  if (!found) throw new Error('回答 ' + responseId + ' は待ち行列にありません');
+  writeLog('INFO', 'REGRADING', responseId, '再採点を開始しました');
+  runJob_(found.job, found.rowIndex, readSettings());
+}
+
+/** Results シートで選んだ行の回答を再採点する。 */
 function menuRegradeSelected() {
-  SpreadsheetApp.getActive().toast('再採点はまだ実装されていません', 'AI Grader', 5);
+  var sheet = SpreadsheetApp.getActiveSheet();
+  if (sheet.getName() !== SHEET_NAMES.RESULTS) {
+    SpreadsheetApp.getActive().toast('Results シートで再採点したい行を選んでから実行してください', 'AI Grader', 6);
+    return;
+  }
+  var range = sheet.getActiveRange();
+  var ids = {};
+  for (var r = range.getRow(); r < range.getRow() + range.getNumRows(); r++) {
+    if (r < 2) continue;
+    var id = sheet.getRange(r, 1).getValue();
+    if (id) ids[id] = true;
+  }
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return;
+  try {
+    Object.keys(ids).forEach(regradeResponse);
+  } finally {
+    lock.releaseLock();
+  }
+  SpreadsheetApp.getActive().toast(Object.keys(ids).length + '件の回答を再採点しました', 'AI Grader', 6);
 }
-function finalizeManualGrades() {
-  SpreadsheetApp.getActive().toast('Manual採点の反映はまだ実装されていません', 'AI Grader', 5);
-}
+
 function runDiagnostics() {
   SpreadsheetApp.getActive().toast('システム診断はまだ実装されていません', 'AI Grader', 5);
 }

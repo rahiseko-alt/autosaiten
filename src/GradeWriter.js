@@ -51,9 +51,68 @@ function writeResultValues_(sheet, startRow, valueRows) {
 }
 
 /**
- * 確定した回答の点数をフォームへ書き戻す。T9 で実装する。
- * 確定していない回答では呼ばない（ADR 0003）。
+ * 確定した回答の点数をフォームへ書き戻す。確定していない回答では呼ばない（ADR 0003）。
+ * フォームの送信イベントは使っていないので、書き戻しで新しい job は作られない（ADR 0005）。
  */
 function writeBackScores(formId, responseId, rows) {
-  // 未実装
+  var form = FormApp.openById(formId);
+  var formResponse = form.getResponse(responseId);
+  var itemOfQuestion = {};
+  readTable(SHEET_NAMES.FORM_MAPPING).forEach(function (m) {
+    if (m.form_id === formId) itemOfQuestion[m.question_id] = Number(m.form_item_id);
+  });
+
+  var graded = 0;
+  scoresToWriteBack(rows).forEach(function (s) {
+    var itemId = itemOfQuestion[s.question_id];
+    if (itemId === undefined) return;
+    var itemResponse = formResponse.getGradableResponseForItem(form.getItemById(itemId));
+    if (!itemResponse) return; // 未回答の項目には点を付けられない
+    itemResponse.setScore(s.score);
+    formResponse.withItemGrade(itemResponse);
+    graded += 1;
+  });
+  if (graded > 0) form.submitGrades([formResponse]);
+  writeLog('INFO', 'GRADE_SUBMITTED', responseId, 'フォームへ点数を反映しました', { items: graded });
+}
+
+/** 教師が入れた manual_score を反映する。確定した回答はフォームへ書き戻し、Queue を COMPLETED にする。 */
+function finalizeManualGrades() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return;
+  try {
+    var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.RESULTS);
+    var headers = SHEET_HEADERS.Results;
+    var existing = readResultsWithRows_();
+    var recomputed = recomputeResponses(existing);
+    var rowIndexOf = {};
+    existing.forEach(function (r) { rowIndexOf[r.response_id + '\u0000' + r.question_id] = r.__row; });
+    var queue = readQueueRows_();
+    var done = 0;
+
+    Object.keys(recomputed).forEach(function (responseId) {
+      var item = recomputed[responseId];
+      var before = existing.filter(function (r) { return r.response_id === responseId; });
+      var changed = item.rows.some(function (r, i) {
+        return String(r.final_score) !== String(before[i].final_score) || r.status !== before[i].status;
+      });
+      var job = queue.filter(function (q) { return q.job.response_id === responseId; })[0];
+      var needsWriteBack = item.finalized && job && job.job.status !== 'COMPLETED';
+      if (!changed && !needsWriteBack) return;
+
+      item.rows.forEach(function (r) {
+        var rowIndex = rowIndexOf[r.response_id + '\u0000' + r.question_id];
+        sheet.getRange(rowIndex, headers.indexOf('final_score') + 1).setValue(r.final_score);
+        sheet.getRange(rowIndex, headers.indexOf('status') + 1).setValue(r.status);
+      });
+      if (item.finalized) {
+        writeBackScores(job ? job.job.form_id : '', responseId, item.rows);
+        if (job) updateJob_(job.rowIndex, { status: 'COMPLETED' });
+        done += 1;
+      }
+    });
+    SpreadsheetApp.getActive().toast(done + '件の回答を確定し、フォームへ反映しました', 'AI Grader', 6);
+  } finally {
+    lock.releaseLock();
+  }
 }
