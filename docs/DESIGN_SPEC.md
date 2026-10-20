@@ -1,3 +1,5 @@
+> **注意**: この設計書への変更は `docs/DESIGN_ADDENDUM.md` に記録している。食い違う場合は補足を優先する。
+
 # Google Forms AI Grader
 ## 実装設計書 v1.0
 
