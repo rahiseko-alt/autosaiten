@@ -173,7 +173,3 @@ function menuRegradeSelected() {
   }
   SpreadsheetApp.getActive().toast(Object.keys(ids).length + '件の回答を再採点しました', 'AI Grader', 6);
 }
-
-function runDiagnostics() {
-  SpreadsheetApp.getActive().toast('システム診断はまだ実装されていません', 'AI Grader', 5);
-}

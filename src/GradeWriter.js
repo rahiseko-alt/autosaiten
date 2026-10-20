@@ -106,8 +106,10 @@ function finalizeManualGrades() {
         sheet.getRange(rowIndex, headers.indexOf('status') + 1).setValue(r.status);
       });
       if (item.finalized) {
-        writeBackScores(job ? job.job.form_id : '', responseId, item.rows);
-        if (job) updateJob_(job.rowIndex, { status: 'COMPLETED' });
+        if (job) {
+          writeBackScores(job.job.form_id, responseId, item.rows);
+          updateJob_(job.rowIndex, { status: 'COMPLETED' });
+        }
         done += 1;
       }
     });
