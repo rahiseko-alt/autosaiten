@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { gradeResponse, mergeResults, latestRubricCriteria } = require('../src/ResponseGrader.js');
-const { MockProvider } = require('../src/providers/MockProvider.js');
+const { MockProvider } = require('./MockProvider.js');
 
 const questions = [
   { enabled: true, question_id: 'Q001', question_text: '首都は？', question_type: 'SHORT_TEXT', points: 5, grading_mode: 'AUTO', auto_rule: 'ANY_OF', correct_answer: '東京', alternatives: '東京都' },
@@ -90,7 +90,7 @@ test('最新の版のルーブリックを使う', () => {
 
 test('再採点は既存の行を更新し、教師が入れた manual_score を守る', () => {
   const fresh = run().rows;
-  const existing = [{ response_id: 'r1', question_id: 'Q003', manual_score: 6, status: 'REVIEW_REQUIRED', grading_mode: 'LLM' }];
+  const existing = [{ response_id: 'r1', question_id: 'Q003', manual_score: 6, max_score: 10, status: 'REVIEW_REQUIRED', grading_mode: 'LLM' }];
   const merged = mergeResults(existing, fresh);
   assert.equal(merged.length, 3);
   const q3 = merged.filter((m) => m.row.question_id === 'Q003')[0];

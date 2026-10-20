@@ -124,8 +124,10 @@ function mergeResults(existing, fresh) {
   existing.forEach(function (r) { byKey[r.response_id + '\u0000' + r.question_id] = r; });
   return fresh.map(function (row) {
     var old = byKey[row.response_id + '\u0000' + row.question_id];
-    if (old && !rgIsBlank_(old.manual_score)) {
+    var valid = rgFn_('validManualScore', './Scoring.js');
+    if (old && valid(old.manual_score, row.max_score)) {
       row.manual_score = old.manual_score;
+      if (row.status === 'MANUAL_PENDING' || row.status === 'REVIEW_REQUIRED') row.status = 'MANUAL_GRADED';
       rgFinish_(row);
     }
     return { row: row, existed: !!old };

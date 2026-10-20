@@ -8,6 +8,7 @@ var VALIDATION_GRADING_MODES_ = ['AUTO', 'LLM', 'MANUAL'];
 var VALIDATION_AUTO_RULES_ = ['NATIVE', 'EXACT', 'ANY_OF', 'CONTAINS', 'NUMBER'];
 var VALIDATION_CHOICE_TYPES_ = ['MULTIPLE_CHOICE', 'CHECKBOX', 'DROPDOWN'];
 var VALIDATION_PROVIDERS_ = ['OPENAI', 'ANTHROPIC', 'GEMINI'];
+var VALIDATION_IMPLEMENTED_PROVIDERS_ = ['ANTHROPIC'];
 
 function validationSplit_(value) {
   var list = (typeof splitList === 'function') ? splitList : require('./Utils.js').splitList;
@@ -140,6 +141,10 @@ function vRubricLatest_(rubrics, rubricId) {
 function vValidateSettings_(settings, hasLlm, errors) {
   if (VALIDATION_PROVIDERS_.indexOf(String(settings.LLM_PROVIDER || '').trim()) < 0) {
     errors.push('ERROR: Settings LLM_PROVIDERが不正です（OPENAI/ANTHROPIC/GEMINI から選んでください）。');
+  }
+  if (hasLlm && VALIDATION_PROVIDERS_.indexOf(String(settings.LLM_PROVIDER || '').trim()) >= 0 &&
+      VALIDATION_IMPLEMENTED_PROVIDERS_.indexOf(String(settings.LLM_PROVIDER).trim()) < 0) {
+    errors.push('ERROR: Settings LLM_PROVIDER ' + settings.LLM_PROVIDER + ' はまだ使えません（現在使えるのは ' + VALIDATION_IMPLEMENTED_PROVIDERS_.join('/') + ' です）。');
   }
   if (hasLlm && vIsBlank_(settings.LLM_MODEL)) {
     errors.push('ERROR: Settings LLM_MODELが未設定です（LLMで採点する問題があります）。');

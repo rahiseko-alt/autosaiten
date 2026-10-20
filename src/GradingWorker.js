@@ -51,45 +51,71 @@ function updateJob_(rowIndex, patch) {
   });
 }
 
-/** フォームの新しい回答を待ち行列に登録する。すでにあるものは登録しない。 */
+/** すべての版のフォームから、新しい回答を待ち行列に登録する。すでにあるものは登録しない。 */
 function ingestNewResponses_() {
   var props = PropertiesService.getDocumentProperties();
-  var formId = props.getProperty(PROP_ACTIVE_FORM_ID);
-  if (!formId) return;
-  var form = openFormOrNull_(formId);
-  if (!form) return;
-  var version = Number(props.getProperty(PROP_FORM_VERSION)) || 1;
-  var responses = form.getResponses().map(function (r) { return { response_id: r.getId() }; });
-  var fresh = planNewJobs(responses, readQueueRows_().map(function (j) { return j.job; }));
-  if (fresh.length === 0) return;
-  var now = new Date();
-  var rows = fresh.map(function (r) {
-    return [Utilities.getUuid(), r.response_id, formId, version, 'PENDING', 0, '', now, now, ''];
+  var forms = {};
+  var activeId = props.getProperty(PROP_ACTIVE_FORM_ID);
+  if (activeId) forms[activeId] = Number(props.getProperty(PROP_FORM_VERSION)) || 1;
+  readTable(SHEET_NAMES.FORM_MAPPING).forEach(function (m) {
+    if (m.form_id && forms[m.form_id] === undefined) forms[m.form_id] = Number(m.form_version);
   });
-  var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.QUEUE);
-  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
-  writeLog('INFO', 'RESPONSE_QUEUED', formId, fresh.length + '件の回答を登録しました');
+
+  Object.keys(forms).forEach(function (formId) {
+    var form;
+    try {
+      form = FormApp.openById(formId);
+    } catch (e) {
+      writeLog('WARN', 'FORM_UNAVAILABLE', formId, 'フォームを開けませんでした。次の回で再試行します');
+      return;
+    }
+    var responses = form.getResponses().map(function (r) { return { response_id: r.getId() }; });
+    var fresh = planNewJobs(responses, readQueueRows_().map(function (j) { return j.job; }));
+    if (fresh.length === 0) return;
+    var now = new Date();
+    var rows = fresh.map(function (r) {
+      return [Utilities.getUuid(), r.response_id, formId, forms[formId], 'PENDING', 0, '', now, now, ''];
+    });
+    var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.QUEUE);
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    writeLog('INFO', 'RESPONSE_QUEUED', formId, fresh.length + '件の回答を登録しました');
+  });
 }
 
-/** 実行が途中で止まって PROCESSING のままの job を RETRY に戻す。 */
+/** 実行が途中で止まって PROCESSING のままの job を、再試行回数を増やして RETRY に戻す。 */
 function recoverStaleJobs_() {
   var jobs = readQueueRows_();
   var stale = findStaleJobs(jobs.map(function (j) { return j.job; }), new Date(), WORKER_STALE_MINUTES);
   stale.forEach(function (s) {
     var found = jobs.filter(function (j) { return j.job.job_id === s.job_id; })[0];
-    updateJob_(found.rowIndex, { status: 'RETRY', next_run_at: new Date(), last_error: '処理が途中で止まったため再試行します' });
+    var next = afterAttempt(s, { type: 'ERROR', message: '処理が途中で止まったため再試行します' }, new Date());
+    updateJob_(found.rowIndex, {
+      status: next.status, retry_count: next.retry_count, last_error: next.last_error, next_run_at: next.next_run_at || ''
+    });
   });
 }
 
-function runJob_(job, rowIndex, settings) {
+function runJob_(job, rowIndex, settings, force) {
   updateJob_(rowIndex, { status: 'PROCESSING' });
   writeLog('INFO', 'GRADING_STARTED', job.response_id, '採点を開始しました');
   var outcome;
   try {
-    var result = gradeJob_(job, settings);
-    saveResultRows(result.rows);
-    if (result.finalized) {
-      writeBackScores(job.form_id, job.response_id, result.rows);
+    var done = null;
+    if (!force) {
+      // 採点と保存は済んでいて、書き戻しだけが失敗していた場合は、LLM を呼び直さない。
+      var existing = readResultsWithRows_().filter(function (r) { return r.response_id === job.response_id; });
+      var again = existing.length > 0 ? recomputeResponses(existing)[job.response_id] : null;
+      if (again && again.finalized) done = { rows: again.rows, finalized: true };
+    }
+    if (!done) {
+      var lastAttempt = (Number(job.retry_count) || 0) + 1 >= QUEUE_MAX_RETRIES;
+      var graded = gradeJob_(job, settings, { onProviderError: lastAttempt ? 'review' : 'throw' });
+      var saved = saveResultRows(graded.rows);
+      var recomputed = recomputeResponses(saved)[job.response_id];
+      done = { rows: recomputed.rows, finalized: recomputed.finalized };
+    }
+    if (done.finalized) {
+      writeBackScores(job.form_id, job.response_id, done.rows);
       outcome = { type: 'FINALIZED' };
       writeLog('INFO', 'GRADING_COMPLETED', job.response_id, '採点が確定しました');
     } else {
@@ -108,7 +134,7 @@ function runJob_(job, rowIndex, settings) {
 }
 
 /** フォームの回答を読み、採点して Results の行にする（保存はしない）。 */
-function gradeJob_(job, settings) {
+function gradeJob_(job, settings, deps) {
   var form = FormApp.openById(job.form_id);
   var formResponse = form.getResponse(job.response_id);
   var questionOfItem = {};
@@ -136,7 +162,8 @@ function gradeJob_(job, settings) {
     rubrics: readTable(SHEET_NAMES.RUBRICS),
     settings: settings,
     provider: createProvider(settings),
-    now: new Date()
+    now: new Date(),
+    deps: deps
   });
 }
 
@@ -147,7 +174,7 @@ function regradeResponse(responseId) {
   var found = readQueueRows_().filter(function (j) { return j.job.response_id === responseId; })[0];
   if (!found) throw new Error('回答 ' + responseId + ' は待ち行列にありません');
   writeLog('INFO', 'REGRADING', responseId, '再採点を開始しました');
-  runJob_(found.job, found.rowIndex, readSettings());
+  runJob_(found.job, found.rowIndex, readSettings(), true);
 }
 
 /** Results シートで選んだ行の回答を再採点する。 */

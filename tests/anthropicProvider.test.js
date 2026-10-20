@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { AnthropicProvider, buildRequest, parseResponse, isRetryable } = require('../src/providers/AnthropicProvider.js');
+const { AnthropicProvider, anthropicBuildRequest: buildRequest, anthropicParseResponse: parseResponse, anthropicIsRetryable: isRetryable } = require('../src/providers/AnthropicProvider.js');
 
 const payload = {
   prompt_version: 1, nonce: 'abc', system: 'SYS abc',

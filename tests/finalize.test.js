@@ -34,3 +34,13 @@ test('書き戻す点数は、最終点が入っている問題だけ', () => {
   const rows = [row(), row({ question_id: 'Q2', final_score: '' }), row({ question_id: 'Q3', final_score: 0, status: 'UNANSWERED' })];
   assert.deepEqual(scoresToWriteBack(rows), [{ question_id: 'Q1', score: 5 }, { question_id: 'Q3', score: 0 }]);
 });
+
+test('不正な manual_score は無視して確定させず、理由を返す', () => {
+  const rows = [row({ question_id: 'Q2', grading_mode: 'MANUAL', status: 'MANUAL_PENDING', auto_score: '', final_score: '', manual_score: 'abc', max_score: 5 }),
+    row({ question_id: 'Q3', grading_mode: 'MANUAL', status: 'MANUAL_PENDING', auto_score: '', final_score: '', manual_score: 9, max_score: 5 })];
+  const r = recomputeResponses(rows).r1;
+  assert.equal(r.finalized, false);
+  assert.equal(r.errors.length, 2);
+  assert.ok(r.errors[0].includes('Q2'));
+  assert.deepEqual(r.rows.map((x) => x.final_score), ['', '']);
+});

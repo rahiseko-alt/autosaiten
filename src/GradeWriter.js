@@ -24,6 +24,7 @@ function readResultsWithRows_() {
 function saveResultRows(freshRows) {
   var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.RESULTS);
   var headers = SHEET_HEADERS.Results;
+  if (freshRows.length === 0) return [];
   var existing = readResultsWithRows_().filter(function (r) { return r.response_id === freshRows[0].response_id; });
   var merged = mergeResults(existing, freshRows);
   var rowOf = {};
@@ -76,10 +77,18 @@ function writeBackScores(formId, responseId, rows) {
   writeLog('INFO', 'GRADE_SUBMITTED', responseId, 'フォームへ点数を反映しました', { items: graded });
 }
 
-/** 教師が入れた manual_score を反映する。確定した回答はフォームへ書き戻し、Queue を COMPLETED にする。 */
+/**
+ * 教師が入れた manual_score を反映する。確定した回答はフォームへ書き戻し、Queue を COMPLETED にする。
+ * 回答ごとに処理し、1件の失敗や入力ミスで残りを止めない。
+ */
 function finalizeManualGrades() {
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) return;
+  if (!lock.tryLock(5000)) {
+    SpreadsheetApp.getActive().toast('別の処理が実行中です。しばらくしてからもう一度お試しください', 'AI Grader', 6);
+    return;
+  }
+  var done = 0;
+  var problems = [];
   try {
     var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.RESULTS);
     var headers = SHEET_HEADERS.Results;
@@ -88,33 +97,40 @@ function finalizeManualGrades() {
     var rowIndexOf = {};
     existing.forEach(function (r) { rowIndexOf[r.response_id + '\u0000' + r.question_id] = r.__row; });
     var queue = readQueueRows_();
-    var done = 0;
 
     Object.keys(recomputed).forEach(function (responseId) {
       var item = recomputed[responseId];
-      var before = existing.filter(function (r) { return r.response_id === responseId; });
-      var changed = item.rows.some(function (r, i) {
-        return String(r.final_score) !== String(before[i].final_score) || r.status !== before[i].status;
-      });
-      var job = queue.filter(function (q) { return q.job.response_id === responseId; })[0];
-      var needsWriteBack = item.finalized && job && job.job.status !== 'COMPLETED';
-      if (!changed && !needsWriteBack) return;
+      try {
+        item.errors.forEach(function (e) { problems.push(responseId + ': ' + e); });
+        var before = existing.filter(function (r) { return r.response_id === responseId; });
+        var changed = item.rows.some(function (r, i) {
+          return String(r.final_score) !== String(before[i].final_score) || r.status !== before[i].status;
+        });
+        var job = queue.filter(function (q) { return q.job.response_id === responseId; })[0];
+        var needsWriteBack = item.finalized && job && job.job.status !== 'COMPLETED';
+        if (!changed && !needsWriteBack) return;
 
-      item.rows.forEach(function (r) {
-        var rowIndex = rowIndexOf[r.response_id + '\u0000' + r.question_id];
-        sheet.getRange(rowIndex, headers.indexOf('final_score') + 1).setValue(r.final_score);
-        sheet.getRange(rowIndex, headers.indexOf('status') + 1).setValue(r.status);
-      });
-      if (item.finalized) {
-        if (job) {
+        item.rows.forEach(function (r) {
+          var rowIndex = rowIndexOf[r.response_id + '\u0000' + r.question_id];
+          sheet.getRange(rowIndex, headers.indexOf('final_score') + 1).setValue(r.final_score);
+          sheet.getRange(rowIndex, headers.indexOf('status') + 1).setValue(r.status);
+        });
+        if (item.finalized && job) {
           writeBackScores(job.job.form_id, responseId, item.rows);
           updateJob_(job.rowIndex, { status: 'COMPLETED' });
+          done += 1;
         }
-        done += 1;
+      } catch (err) {
+        problems.push(responseId + ': ' + String(err && err.message));
+        writeLog('ERROR', 'FINALIZE_FAILED', responseId, String(err && err.message));
       }
     });
-    SpreadsheetApp.getActive().toast(done + '件の回答を確定し、フォームへ反映しました', 'AI Grader', 6);
   } finally {
     lock.releaseLock();
   }
+  if (problems.length > 0) {
+    setControl('MESSAGE', 'Manual採点の反映で次の問題がありました:\n' + problems.join('\n'));
+    writeLog('WARN', 'FINALIZE_PROBLEMS', '', problems.length + '件の問題がありました');
+  }
+  SpreadsheetApp.getActive().toast(done + '件の回答を確定し、フォームへ反映しました' + (problems.length ? '（問題あり。Control を確認してください）' : ''), 'AI Grader', 8);
 }

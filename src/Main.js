@@ -27,7 +27,10 @@ function menuValidate() {
 
 function menuBuildForm() {
   var lock = LockService.getDocumentLock();
-  if (!lock.tryLock(1000)) return;
+  if (!lock.tryLock(1000)) {
+    SpreadsheetApp.getActive().toast('別の処理が実行中です。しばらくしてからもう一度お試しください', 'AI Grader', 6);
+    return;
+  }
   try {
     runBuildFlow_();
   } finally {

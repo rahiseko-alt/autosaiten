@@ -4,7 +4,7 @@ const {
   buildGradingPayload, redactPersonalInfo, detectInjection,
   validateGradeResult, gradeLlmBatch
 } = require('../src/LLMGrader.js');
-const { MockProvider } = require('../src/providers/MockProvider.js');
+const { MockProvider } = require('./MockProvider.js');
 
 const criteria = [
   { criterion_id: 'C01', criterion: '理由', max_points: 4, description: 'a', required: true },
@@ -62,6 +62,7 @@ test('不正な出力は理由つきで検出する', () => {
   assert.ok(bad({ question_id: 'Q999' }).length > 0);
   assert.ok(bad({ score: -1 }).length > 0);
   assert.ok(bad({ score: 11 }).length > 0);
+  assert.ok(bad({ score: 7.5 }).length > 0);
   assert.ok(bad({ max_score: 9 }).length > 0);
   assert.ok(bad({ confidence: 1.2 }).length > 0);
   assert.ok(bad({ score: 7 }).length > 0);
@@ -89,9 +90,14 @@ test('出力が不正なら REVIEW_REQUIRED で、0点にはならない', () =>
   assert.ok(r.reason.length > 0);
 });
 
-test('提供元が失敗したら全件 REVIEW_REQUIRED（黙って0点にしない）', () => {
+test('提供元が失敗したら、通常は例外を外へ伝える（待ち行列で再試行するため）', () => {
   const provider = new MockProvider(() => { throw new Error('boom'); });
-  const [r] = gradeLlmBatch(provider, [item()], settings, deps);
+  assert.throws(() => gradeLlmBatch(provider, [item()], settings, deps), /boom/);
+});
+
+test('最後の試行では、提供元の失敗を REVIEW_REQUIRED にする（黙って0点にしない）', () => {
+  const provider = new MockProvider(() => { throw new Error('boom'); });
+  const [r] = gradeLlmBatch(provider, [item()], settings, Object.assign({ onProviderError: 'review' }, deps));
   assert.equal(r.status, 'REVIEW_REQUIRED');
   assert.equal(r.llm_score, null);
 });

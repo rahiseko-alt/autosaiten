@@ -47,7 +47,9 @@ function runDiagnostics() {
   var props = PropertiesService.getDocumentProperties();
   var formId = props.getProperty(PROP_ACTIVE_FORM_ID);
   if (formId) {
-    checks.push({ name: 'フォームへのアクセス', ok: openFormOrNull_(formId) !== null, detail: 'フォームID ' + formId });
+    var formOk = true;
+    try { FormApp.openById(formId); } catch (e) { formOk = false; }
+    checks.push({ name: 'フォームへのアクセス', ok: formOk, detail: 'フォームID ' + formId });
   } else {
     checks.push({ name: 'フォームへのアクセス', ok: false, detail: 'フォームがまだ作られていません' });
   }

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { resolveFinalScore, isResponseFinalized, decideLlmStatus } = require('../src/Scoring.js');
+const { resolveFinalScore, isResponseFinalized, decideLlmStatus, validManualScore } = require('../src/Scoring.js');
 
 test('AUTO は auto_score が確定点', () => {
   assert.deepEqual(resolveFinalScore({ grading_mode: 'AUTO', status: 'AUTO_GRADED', auto_score: 4 }), { final_score: 4, confirmed: true });
@@ -41,4 +41,13 @@ test('信頼度が閾値以上なら LLM_GRADED、未満なら REVIEW_REQUIRED',
   assert.equal(decideLlmStatus(0.8, 0.8), 'LLM_GRADED');
   assert.equal(decideLlmStatus(0.79, 0.8), 'REVIEW_REQUIRED');
   assert.equal(decideLlmStatus(undefined, 0.8), 'REVIEW_REQUIRED');
+});
+
+test('manual_score は0以上で配点以下の数値だけ有効', () => {
+  assert.equal(validManualScore(0, 5), true);
+  assert.equal(validManualScore('3', 5), true);
+  assert.equal(validManualScore(6, 5), false);
+  assert.equal(validManualScore(-1, 5), false);
+  assert.equal(validManualScore('abc', 5), false);
+  assert.equal(validManualScore('', 5), false);
 });

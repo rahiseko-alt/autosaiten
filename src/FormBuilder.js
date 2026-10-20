@@ -14,7 +14,15 @@ function buildOrVersionForm() {
   var hash = definitionHash(questions, settings);
 
   var formId = props.getProperty(PROP_ACTIVE_FORM_ID);
-  var form = formId ? openFormOrNull_(formId) : null;
+  var form = null;
+  if (formId) {
+    // 開けないときに「フォームが無い」と決めつけて新しく作ると、回答済みのフォームを置き去りにする。
+    try {
+      form = FormApp.openById(formId);
+    } catch (e) {
+      throw new Error('現在のフォームを開けませんでした。少し待ってもう一度試すか、導入担当者に連絡してください');
+    }
+  }
   var version = Number(props.getProperty(PROP_FORM_VERSION)) || 0;
 
   var action = decideFormAction({
@@ -51,14 +59,6 @@ function buildOrVersionForm() {
 
 function fbIsTrue_(value) {
   return value === true || String(value).trim().toUpperCase() === 'TRUE';
-}
-
-function openFormOrNull_(formId) {
-  try {
-    return FormApp.openById(formId);
-  } catch (e) {
-    return null;
-  }
 }
 
 function populateForm_(form, spec, version) {

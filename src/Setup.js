@@ -55,6 +55,8 @@ function setupSettings_(sheet) {
 }
 
 function setupQuestionsValidation_(sheet) {
+  // question_id が「001」のような数字でも数値にされないよう、文字列の書式にする
+  sheet.getRange('B2:B1000').setNumberFormat('@');
   var rule = function (a1, builder) { sheet.getRange(a1).setDataValidation(builder.build()); };
   rule('A2:A1000', SpreadsheetApp.newDataValidation().requireCheckbox());
   rule('F2:F1000', SpreadsheetApp.newDataValidation().requireCheckbox());

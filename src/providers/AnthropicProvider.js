@@ -18,15 +18,15 @@ var ANTHROPIC_TOOL_ = {
           type: 'object',
           properties: {
             question_id: { type: 'string' },
-            score: { type: 'number' },
-            max_score: { type: 'number' },
+            score: { type: 'integer' },
+            max_score: { type: 'integer' },
             confidence: { type: 'number' },
             reason: { type: 'string' },
             criteria: {
               type: 'array',
               items: {
                 type: 'object',
-                properties: { criterion_id: { type: 'string' }, score: { type: 'number' } },
+                properties: { criterion_id: { type: 'string' }, score: { type: 'integer' } },
                 required: ['criterion_id', 'score']
               }
             }
@@ -40,7 +40,7 @@ var ANTHROPIC_TOOL_ = {
 };
 
 /** 問題・ルーブリック・回答を1つの文章にする。回答は JSON の文字列として区切りの間に置く。 */
-function renderUserPrompt(payload) {
+function anthropicRenderUserPrompt(payload) {
   return payload.items.map(function (it) {
     var rubric = it.rubric.map(function (c) {
       return '- ' + c.criterion_id + ' ' + c.criterion + '（' + c.max_points + '点）: ' + c.description;
@@ -58,23 +58,23 @@ function renderUserPrompt(payload) {
   }).join('\n\n') + '\n\nsubmit_grades ツールで、すべての問題の結果を提出してください。';
 }
 
-function buildRequest(payload, settings, apiKey) {
+function anthropicBuildRequest(payload, settings, apiKey) {
   return {
     url: ANTHROPIC_URL,
-    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
       model: settings.LLM_MODEL,
-      max_tokens: 4096,
+      max_tokens: 8192,
       temperature: 0,
       system: payload.system,
       tools: [ANTHROPIC_TOOL_],
       tool_choice: { type: 'tool', name: 'submit_grades' },
-      messages: [{ role: 'user', content: renderUserPrompt(payload) }]
+      messages: [{ role: 'user', content: anthropicRenderUserPrompt(payload) }]
     })
   };
 }
 
-function parseResponse(bodyText) {
+function anthropicParseResponse(bodyText) {
   var data;
   try {
     data = JSON.parse(bodyText);
@@ -88,7 +88,7 @@ function parseResponse(bodyText) {
   return block.input.results;
 }
 
-function isRetryable(statusCode) {
+function anthropicIsRetryable(statusCode) {
   return [429, 500, 502, 503, 504].indexOf(statusCode) >= 0;
 }
 
@@ -97,7 +97,8 @@ function defaultAnthropicDeps_() {
     getKey: function () { return PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY'); },
     fetch: function (url, options) {
       var res = UrlFetchApp.fetch(url, {
-        method: 'post', headers: options.headers, payload: options.body, muteHttpExceptions: true
+        method: 'post', contentType: 'application/json', headers: options.headers, payload: options.body,
+        muteHttpExceptions: true
       });
       return { code: res.getResponseCode(), body: res.getContentText() };
     },
@@ -117,7 +118,7 @@ function AnthropicProvider(settings, deps) {
 AnthropicProvider.prototype.gradeBatch = function (payload) {
   var key = this.deps.getKey();
   if (!key) throw new Error('ANTHROPIC_API_KEY が設定されていません');
-  var request = buildRequest(payload, this.settings, key);
+  var request = anthropicBuildRequest(payload, this.settings, key);
   var maxRetries = Math.max(0, Number(this.settings.LLM_MAX_RETRIES) || 0);
   var lastError = '';
 
@@ -129,9 +130,9 @@ AnthropicProvider.prototype.gradeBatch = function (payload) {
       lastError = '通信エラー';
     }
     if (res) {
-      if (res.code === 200) return parseResponse(res.body);
+      if (res.code === 200) return anthropicParseResponse(res.body);
       lastError = 'HTTP ' + res.code;
-      if (!isRetryable(res.code)) break;
+      if (!anthropicIsRetryable(res.code)) break;
     }
     if (attempt < maxRetries) this.deps.sleep(ANTHROPIC_BACKOFF_MS[Math.min(attempt, ANTHROPIC_BACKOFF_MS.length - 1)]);
   }
@@ -140,7 +141,7 @@ AnthropicProvider.prototype.gradeBatch = function (payload) {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    AnthropicProvider: AnthropicProvider, buildRequest: buildRequest, parseResponse: parseResponse,
-    isRetryable: isRetryable, renderUserPrompt: renderUserPrompt
+    AnthropicProvider: AnthropicProvider, anthropicBuildRequest: anthropicBuildRequest, anthropicParseResponse: anthropicParseResponse,
+    anthropicIsRetryable: anthropicIsRetryable, anthropicRenderUserPrompt: anthropicRenderUserPrompt
   };
 }

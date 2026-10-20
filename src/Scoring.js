@@ -27,11 +27,21 @@ function isResponseFinalized(rows) {
   return rows.length > 0 && rows.every(function (r) { return resolveFinalScore(r).confirmed; });
 }
 
+/** 教師が入れた manual_score が、0以上で配点以下の数値か。 */
+function validManualScore(value, max) {
+  if (scIsBlank_(value)) return false;
+  var n = Number(value);
+  return isFinite(n) && n >= 0 && (max === undefined || max === '' || n <= Number(max));
+}
+
 /** 信頼度が閾値以上なら LLM_GRADED、未満または不明なら REVIEW_REQUIRED。 */
 function decideLlmStatus(confidence, threshold) {
   return (typeof confidence === 'number' && confidence >= threshold) ? 'LLM_GRADED' : 'REVIEW_REQUIRED';
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { resolveFinalScore: resolveFinalScore, isResponseFinalized: isResponseFinalized, decideLlmStatus: decideLlmStatus };
+  module.exports = {
+    resolveFinalScore: resolveFinalScore, isResponseFinalized: isResponseFinalized,
+    decideLlmStatus: decideLlmStatus, validManualScore: validManualScore
+  };
 }

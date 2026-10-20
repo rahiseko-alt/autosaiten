@@ -131,3 +131,9 @@ test('LLM の問題があるのに LLM_MODEL が空ならエラー', () => {
 test('有効な問題が1つも無ければエラー', () => {
   assert.ok(run([]).some(e => e.includes('問題')));
 });
+
+test('LLM の問題があるのに、まだ使えない提供元を選んでいればエラー', () => {
+  const openai = Object.assign({}, settings, { LLM_PROVIDER: 'OPENAI' });
+  assert.ok(run([llmQ], { settings: openai }).some(e => e.includes('OPENAI') && e.includes('まだ使えません')));
+  assert.deepEqual(run([q()], { settings: openai }), []);
+});
