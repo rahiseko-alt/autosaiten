@@ -62,6 +62,14 @@ test('必ず埋める列の見出しは黄色、条件つきの列は薄い橙�
   ['A1', 'B1', 'C1', 'D1', 'E1'].forEach((a1) => assert.equal(r.backgrounds[a1], '#ffff00', a1));
 });
 
+test('未記入の必須欄を黄色にする条件つき書式は、何度セットアップしても増えない', () => {
+  const env = createGasContext();
+  env.ctx.setupSystem();
+  env.ctx.setupSystem();
+  assert.equal(env.ss.getSheetByName('Questions').getConditionalFormatRules().length, 5);
+  assert.equal(env.ss.getSheetByName('Rubrics').getConditionalFormatRules().length, 1);
+});
+
 test('不備があれば ERROR になり、全件が MESSAGE に出て、チェックは戻る', () => {
   const env = createGasContext();
   env.ctx.setupSystem();

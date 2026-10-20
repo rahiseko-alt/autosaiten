@@ -45,6 +45,8 @@ class FakeSheet {
     return new FakeRange(this, a, b, c || 1, d || 1);
   }
   getProtections() { return []; }
+  setConditionalFormatRules(rules) { this.conditionalRules = rules; }
+  getConditionalFormatRules() { return this.conditionalRules || []; }
   protect() { return noop(); }
   getActiveRange() { return this.getRange(1, 1); }
 }
@@ -164,7 +166,7 @@ function createGasContext(options) {
     console,
     SpreadsheetApp: {
       getActive: () => ss, getActiveSpreadsheet: () => ss, getActiveSheet: () => ss.getActiveSheet(),
-      newDataValidation: () => noop(), ProtectionType: { SHEET: 'SHEET' },
+      newDataValidation: () => noop(), newConditionalFormatRule: () => noop(), ProtectionType: { SHEET: 'SHEET' },
       getUi: () => noop()
     },
     FormApp: {

@@ -19,6 +19,7 @@ function setupSystem() {
   setupQuestionsValidation_(ss.getSheetByName(SHEET_NAMES.QUESTIONS));
   ss.getSheetByName(SHEET_NAMES.RUBRICS).getRange('G2:G1000').setDataValidation(
     SpreadsheetApp.newDataValidation().requireCheckbox().build());
+  setupMissingInputHighlights_(ss);
   INTERNAL_SHEETS.forEach(function (name) { protectInternal_(ss.getSheetByName(name)); });
 
   installRequiredTriggers();
@@ -71,6 +72,33 @@ function setupQuestionsValidation_(sheet) {
   rule('E2:E1000', SpreadsheetApp.newDataValidation().requireValueInList(QUESTION_TYPES, true));
   rule('H2:H1000', SpreadsheetApp.newDataValidation().requireValueInList(GRADING_MODES, true));
   rule('I2:I1000', SpreadsheetApp.newDataValidation().requireValueInList(AUTO_RULES, true));
+}
+
+/**
+ * 書き始めた行で、まだ埋めていない必須の欄を黄色にする（条件つき書式）。
+ * 何度実行しても同じ状態になるよう、両シートの条件つき書式は置き換える。
+ */
+function setupMissingInputHighlights_(ss) {
+  var q = ss.getSheetByName(SHEET_NAMES.QUESTIONS);
+  var inUse = 'COUNTA($B2,$D2,$E2,$G2,$H2)>0';
+  var rule = function (ranges, formula) {
+    return SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied(formula).setBackground('#ffff00')
+      .setRanges(ranges.map(function (a1) { return q.getRange(a1); })).build();
+  };
+  q.setConditionalFormatRules([
+    rule(['A2:A1000'], '=AND(' + inUse + ',$A2<>TRUE)'),
+    rule(['B2:B1000', 'D2:E1000', 'G2:H1000'], '=AND(' + inUse + ',LEN(B2)=0)'),
+    rule(['I2:J1000'], '=AND($H2="AUTO",LEN(I2)=0)'),
+    rule(['M2:M1000'], '=AND(OR($E2="MULTIPLE_CHOICE",$E2="CHECKBOX",$E2="DROPDOWN"),LEN(M2)=0)'),
+    rule(['N2:N1000'], '=AND($H2="LLM",LEN(N2)=0)')
+  ]);
+  var r = ss.getSheetByName(SHEET_NAMES.RUBRICS);
+  r.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=AND(COUNTA($A2:$F2)>0,LEN(A2)=0)').setBackground('#ffff00')
+      .setRanges([r.getRange('A2:E1000')]).build()
+  ]);
 }
 
 function protectInternal_(sheet) {
