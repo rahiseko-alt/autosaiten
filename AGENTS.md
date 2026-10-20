@@ -48,3 +48,25 @@ records nothing.
 `/improve-codebase-architecture` -> pick a candidate -> `/grill-with-docs` or `/codebase-design` -> `/to-spec` -> `/to-tickets` -> `/implement`
 
 `/improve-codebase-architecture` is a survey: it explores the codebase and hands back candidates. It never rewrites code on its own. Only the candidate the user picks goes through the flow above.
+
+## Google Forms AI Grader の実装ルール
+
+設計書は `docs/DESIGN_SPEC.md`。`docs/DESIGN_ADDENDUM.md` の変更を優先する。
+
+1. GitHub が source of truth。
+2. GAS エディタ上だけの変更は禁止。
+3. Spreadsheet schema（列の増減）を無断で変更しない。
+4. question_id をタイトル文字列で代替しない。
+5. API key を repo に保存しない。
+6. LLM provider 固有の処理を LLMGrader へ直書きしない。
+7. Provider は adapter 経由。
+8. 回答の取り込み処理の中で重い LLM 処理をしない。
+9. Queue を経由する。
+10. 書き戻しによる再処理の対策（response_id の一意性）を削除しない。
+11. idempotency を維持する。
+12. 破壊的な Form 更新をしない。
+13. response_id + question_id を結果の一意キーとして扱う。
+14. 新機能追加時はテスト追加。
+15. README・DESIGN_SPEC・DESIGN_ADDENDUM とコードが矛盾する場合は実装を止め、仕様差分を明示する。
+
+純粋ロジックのファイルは末尾に `if (typeof module !== 'undefined') module.exports = {...}` を置き、GAS と Node の両方で動かす。テストは `npm test`（Node 標準のテスト機能、依存なし）。
