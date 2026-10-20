@@ -30,7 +30,7 @@ function buildOrVersionForm() {
   var spec = buildFormSpec(questions, settings);
 
   if (action === 'CREATE' || action === 'NEW_VERSION') {
-    if (action === 'NEW_VERSION' && isTrue_(settings.AUTO_CLOSE_OLD_FORM)) {
+    if (action === 'NEW_VERSION' && fbIsTrue_(settings.AUTO_CLOSE_OLD_FORM)) {
       form.setAcceptingResponses(false);
       writeLog('INFO', 'FORM_CLOSED', form.getId(), '旧フォームの回答受付を停止しました', { form_version: version });
     }
@@ -49,7 +49,7 @@ function buildOrVersionForm() {
   showFormInfo_(form, version);
 }
 
-function isTrue_(value) {
+function fbIsTrue_(value) {
   return value === true || String(value).trim().toUpperCase() === 'TRUE';
 }
 
