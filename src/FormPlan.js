@@ -4,7 +4,7 @@
 
 var FORM_PLAN_TYPE_KIND_ = {
   SHORT_TEXT: 'TEXT', PARAGRAPH: 'PARAGRAPH', MULTIPLE_CHOICE: 'MULTIPLE_CHOICE',
-  CHECKBOX: 'CHECKBOX', DROPDOWN: 'DROPDOWN'
+  CHECKBOX: 'CHECKBOX', DROPDOWN: 'DROPDOWN', INFO: 'INFO'
 };
 
 function fpSplit_(value) {
@@ -22,8 +22,9 @@ function fpRequired_(q) {
 
 /**
  * 設定を組み立てた、フォームの仕様。順番どおりに並んだ項目と、フォーム全体の設定を返す。
+ * @param {string[]} [classes] 名簿のクラス。あれば氏名欄の次にクラス欄を付ける
  */
-function buildFormSpec(questions, settings) {
+function buildFormSpec(questions, settings, classes) {
   var previousSection = null;
   var items = questions.filter(fpEnabled_).map(function (q) {
     var section = String(q.section || '').trim();
@@ -43,15 +44,15 @@ function buildFormSpec(questions, settings) {
       kind: FORM_PLAN_TYPE_KIND_[q.question_type],
       title: cut < 0 ? text : text.slice(0, cut).trim(),
       help_text: cut < 0 ? '' : text.slice(cut + 1).trim(),
-      required: fpRequired_(q),
-      points: Number(q.points) || 0,
+      required: q.question_type === 'INFO' ? false : fpRequired_(q),
+      points: q.question_type === 'INFO' ? 0 : (Number(q.points) || 0),
       choices: choices,
       section_header: header,
       feedback_correct: String(q.feedback_correct || ''),
       feedback_incorrect: String(q.feedback_incorrect || '')
     };
   });
-  return {
+  var spec = {
     title: String(settings.FORM_TITLE || ''),
     description: String(settings.FORM_DESCRIPTION || ''),
     collectEmail: settings.COLLECT_EMAIL === true || String(settings.COLLECT_EMAIL).toUpperCase() === 'TRUE',
@@ -60,11 +61,14 @@ function buildFormSpec(questions, settings) {
     nameItem: { title: '氏名（Name）', required: true },
     items: items
   };
+  // クラス欄が無いときは項目ごと入れない（定義の指紋を、クラス欄ができる前と同じに保つ）
+  if (classes && classes.length > 0) spec.classItem = { title: 'クラス（Class）', required: true, choices: classes.slice() };
+  return spec;
 }
 
 /** フォームに影響する定義だけから、短い指紋を作る（FNV-1a 32bit + 長さ）。 */
-function definitionHash(questions, settings) {
-  var spec = buildFormSpec(questions, settings);
+function definitionHash(questions, settings, classes) {
+  var spec = buildFormSpec(questions, settings, classes);
   var raw = JSON.stringify(spec);
   var h = 0x811c9dc5;
   for (var i = 0; i < raw.length; i++) {

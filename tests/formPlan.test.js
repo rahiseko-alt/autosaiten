@@ -84,3 +84,25 @@ test('フォーム仕様: 既定で1人1回に制限し、先頭に必須の氏�
   assert.deepEqual(spec.nameItem, { title: '氏名（Name）', required: true });
   assert.equal(buildFormSpec([q()], Object.assign({}, settings, { LIMIT_ONE_RESPONSE: 'FALSE' })).limitOneResponse, false);
 });
+
+test('説明の欄は答えのない項目になり、見出しと説明に分かれる', () => {
+  const spec = buildFormSpec([q({ question_id: 'Q006', question_type: 'INFO', grading_mode: 'NONE', points: '', required: false,
+    question_text: 'ただし書き\n2行目' })], settings);
+  assert.equal(spec.items[0].kind, 'INFO');
+  assert.equal(spec.items[0].title, 'ただし書き');
+  assert.equal(spec.items[0].help_text, '2行目');
+  assert.equal(spec.items[0].points, 0);
+  assert.equal(spec.items[0].required, false);
+});
+
+test('クラスの一覧があれば、氏名欄の次に必須のクラス欄が付く', () => {
+  const spec = buildFormSpec([q()], settings, ['国際', '総合']);
+  assert.deepEqual(spec.classItem, { title: 'クラス（Class）', required: true, choices: ['国際', '総合'] });
+  assert.notEqual(definitionHash([q()], settings, ['国際', '総合']), definitionHash([q()], settings));
+});
+
+test('クラスの一覧が無ければクラス欄は付かず、定義の指紋もクラス欄が無い場合と同じ', () => {
+  assert.equal('classItem' in buildFormSpec([q()], settings), false);
+  assert.equal('classItem' in buildFormSpec([q()], settings, []), false);
+  assert.equal(definitionHash([q()], settings, []), definitionHash([q()], settings));
+});

@@ -4,3 +4,4 @@ node_modules/
 *.credentials.json
 .env
 .env.*
+reception/LocalSettings.js

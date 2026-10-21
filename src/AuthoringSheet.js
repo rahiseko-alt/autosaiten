@@ -26,7 +26,7 @@ function setupAuthoringSheet_(ss) {
     .setFontWeight('bold').setBackground('#d9eaff');
   ['A', 'B', 'C', 'D'].forEach(function (c) { sheet.getRange(c + h).setBackground('#ffff00'); });
   var notes = {
-    C: '短答・数値・記述・選択・複数選択・プルダウン から選ぶ',
+    C: '短答・数値・記述・選択・複数選択・プルダウン・説明 から選ぶ（説明は答えのない欄）',
     E: '記述は模範解答（空欄可）。複数選択は || 区切り',
     F: '短答で、ほかに正解とする答え（|| 区切り）。数値は許容差',
     G: '選択・複数選択・プルダウンのとき必須（|| 区切り）',
@@ -44,7 +44,7 @@ function setupAuthoringSheet_(ss) {
   rule('A' + first + ':A1000', SpreadsheetApp.newDataValidation().requireCheckbox());
   rule('I' + first + ':I1000', SpreadsheetApp.newDataValidation().requireCheckbox());
   rule('C' + first + ':C1000', SpreadsheetApp.newDataValidation()
-    .requireValueInList(['短答', '数値', '記述', '選択', '複数選択', 'プルダウン'], true));
+    .requireValueInList(['短答', '数値', '記述', '選択', '複数選択', 'プルダウン', '説明'], true));
   // 長い文は折り返さずに切る。行の高さは一定にする（クリックすれば全文が見える）
   sheet.getRange('A1:J1000').setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP).setVerticalAlignment('middle');
   sheet.setRowHeightsForced(2, 999, 21);
@@ -156,7 +156,7 @@ function setupResultsView_(ss) {
   sheet.getRange(1, 1, 1, 9).setValues([['送信日時', '回答者', '問題番号', '問題文', '回答', '点数', '満点', '状態', '採点の理由']])
     .setFontWeight('bold').setBackground('#d9eaff');
   var status = '{"AUTO_GRADED","自動採点済み";"LLM_GRADED","AI採点済み";"REVIEW_REQUIRED","要確認";' +
-    '"MANUAL_PENDING","採点待ち（記述）";"MANUAL_GRADED","手動採点済み";"UNANSWERED","未回答"}';
+    '"MANUAL_PENDING","採点待ち（記述）";"MANUAL_GRADED","手動採点済み";"UNANSWERED","未回答";"NO_POINTS","加点なし"}';
   sheet.getRange('A2').setFormula('=IFNA(FILTER({Results!C2:C,ARRAYFORMULA(IF(Results!W2:W<>"",Results!W2:W,Results!D2:D)),Results!E2:E,Results!F2:F,Results!G2:G,' +
     'Results!L2:L,Results!M2:M,ARRAYFORMULA(IFNA(VLOOKUP(Results!N2:N,' + status + ',2,FALSE),Results!N2:N)),Results!P2:P},' +
     'Results!A2:A<>""),"")');

@@ -6,8 +6,14 @@
 var SHEET_NAMES = {
   AUTHORING: '試験作成', RESULTS_VIEW: '結果',
   CONTROL: 'Control', QUESTIONS: 'Questions', RUBRICS: 'Rubrics', SETTINGS: 'Settings',
-  RESULTS: 'Results', QUEUE: 'Queue', FORM_MAPPING: 'FormMapping', LOGS: 'Logs'
+  RESULTS: 'Results', QUEUE: 'Queue', FORM_MAPPING: 'FormMapping', LOGS: 'Logs',
+  ROSTER: '名簿', MATERIALS: '資料', ASSIGNMENTS: '割り当て'
 };
+
+/** 受付ページ（別の Apps Script プロジェクト、reception/）が読み書きするシートの見出し。 */
+var ROSTER_HEADERS = ['クラス', 'No.', '氏名', '呼び名'];
+var MATERIAL_HEADERS = ['資料番号', '本文', '家賃', '貯金額', '必要額', '不足額', '必要日数', '開始期限'];
+var ASSIGNMENT_HEADERS = ['クラス', '氏名', '資料番号', '受付日時'];
 
 var INTERNAL_SHEETS = [SHEET_NAMES.QUEUE, SHEET_NAMES.FORM_MAPPING, SHEET_NAMES.LOGS];
 
@@ -37,7 +43,7 @@ var SHEET_HEADERS = {
   Results: ['response_id', 'form_version', 'submitted_at', 'respondent_email', 'question_id', 'question_text_snapshot',
     'answer', 'grading_mode', 'auto_score', 'llm_score', 'manual_score', 'final_score', 'max_score', 'status',
     'confidence', 'grading_reason', 'provider', 'model', 'prompt_version', 'rubric_id', 'rubric_version', 'graded_at',
-    'respondent_name'],
+    'respondent_name', 'respondent_class'],
   Queue: ['job_id', 'response_id', 'form_id', 'form_version', 'status', 'retry_count', 'next_run_at',
     'created_at', 'updated_at', 'last_error'],
   FormMapping: ['form_version', 'form_id', 'question_id', 'form_item_id', 'created_at'],
@@ -90,8 +96,10 @@ var DEFAULT_SETTINGS = [
 /** フォーム先頭の氏名欄。FormMapping ではこの番号で記録し、採点の対象にはしない。 */
 var NAME_QUESTION_ID = '__NAME__';
 var NAME_ITEM_TITLE = '氏名（Name）';
+/** 氏名欄の次のクラス欄。氏名欄と同じく採点の対象にしない。 */
+var CLASS_QUESTION_ID = '__CLASS__';
 
-var QUESTION_TYPES = ['SHORT_TEXT', 'PARAGRAPH', 'MULTIPLE_CHOICE', 'CHECKBOX', 'DROPDOWN'];
-var GRADING_MODES = ['AUTO', 'LLM', 'MANUAL'];
+var QUESTION_TYPES = ['SHORT_TEXT', 'PARAGRAPH', 'MULTIPLE_CHOICE', 'CHECKBOX', 'DROPDOWN', 'INFO'];
+var GRADING_MODES = ['AUTO', 'LLM', 'MANUAL', 'NONE'];
 var AUTO_RULES = ['NATIVE', 'EXACT', 'ANY_OF', 'CONTAINS', 'NUMBER'];
 var LLM_PROVIDERS = ['OPENAI', 'ANTHROPIC', 'GEMINI'];

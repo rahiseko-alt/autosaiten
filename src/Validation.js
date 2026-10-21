@@ -53,6 +53,7 @@ function validateConfiguration(config) {
     var type = String(row.question_type || '').trim();
     var mode = String(row.grading_mode || '').trim();
     var rule = String(row.auto_rule || '').trim();
+    var isInfo = type === 'INFO';
 
     if (vIsBlank_(row.question_id)) {
       errors.push('ERROR: ' + label + ' question_idが未設定です。');
@@ -62,6 +63,12 @@ function validateConfiguration(config) {
     seen[row.question_id] = true;
 
     if (vIsBlank_(row.question_text)) errors.push('ERROR: ' + label + ' question_textが未設定です。');
+    // 説明の欄は答えが無いので、種類以外の採点の設定は見ない
+    if (isInfo) return;
+    if (mode === 'NONE') {
+      errors.push('ERROR: ' + label + ' grading_mode NONE は説明の欄（INFO）でだけ使えます。');
+      return;
+    }
     if (VALIDATION_QUESTION_TYPES_.indexOf(type) < 0) {
       errors.push('ERROR: ' + label + ' question_typeが不正です（' + VALIDATION_QUESTION_TYPES_.join('/') + ' から選んでください）。');
     }
