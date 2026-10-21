@@ -22,8 +22,9 @@ function fpRequired_(q) {
 
 /**
  * 設定を組み立てた、フォームの仕様。順番どおりに並んだ項目と、フォーム全体の設定を返す。
+ * @param {string[]} [classes] 名簿のクラス。あれば氏名欄の次にクラス欄を付ける
  */
-function buildFormSpec(questions, settings) {
+function buildFormSpec(questions, settings, classes) {
   var previousSection = null;
   var items = questions.filter(fpEnabled_).map(function (q) {
     var section = String(q.section || '').trim();
@@ -58,13 +59,14 @@ function buildFormSpec(questions, settings) {
     // 既定は1人1回。Settings で FALSE にしたときだけ外す
     limitOneResponse: !(settings.LIMIT_ONE_RESPONSE === false || String(settings.LIMIT_ONE_RESPONSE).toUpperCase() === 'FALSE'),
     nameItem: { title: '氏名（Name）', required: true },
+    classItem: (classes && classes.length > 0) ? { title: 'クラス（Class）', required: true, choices: classes.slice() } : null,
     items: items
   };
 }
 
 /** フォームに影響する定義だけから、短い指紋を作る（FNV-1a 32bit + 長さ）。 */
-function definitionHash(questions, settings) {
-  var spec = buildFormSpec(questions, settings);
+function definitionHash(questions, settings, classes) {
+  var spec = buildFormSpec(questions, settings, classes);
   var raw = JSON.stringify(spec);
   var h = 0x811c9dc5;
   for (var i = 0; i < raw.length; i++) {

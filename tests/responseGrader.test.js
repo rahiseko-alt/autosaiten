@@ -109,3 +109,8 @@ test('配点0の記述は加点なしで0点確定になり、回答全体の確
   assert.equal(row.final_score, 0);
   assert.equal(out.finalized, true);
 });
+
+test('回答者のクラスを行に残す', () => {
+  const out = gradeResponse({ response: Object.assign({}, response, { respondent_class: '国際' }), questions: [questions[0]], rubrics, settings, provider: llmOk(), now });
+  assert.equal(out.rows[0].respondent_class, '国際');
+});

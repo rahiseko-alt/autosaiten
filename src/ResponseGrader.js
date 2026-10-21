@@ -36,7 +36,8 @@ function rgBaseRow_(response, q, settings, now) {
     auto_score: '', llm_score: '', manual_score: '', final_score: '', max_score: Number(q.points) || 0,
     status: '', confidence: '', grading_reason: '', provider: '', model: '', prompt_version: '',
     rubric_id: '', rubric_version: '', graded_at: now,
-    respondent_name: response.respondent_name || ''
+    respondent_name: response.respondent_name || '',
+    respondent_class: response.respondent_class || ''
   };
 }
 

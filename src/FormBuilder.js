@@ -11,7 +11,8 @@ function buildOrVersionForm() {
   var props = PropertiesService.getDocumentProperties();
   var settings = readSettings();
   var questions = readTable(SHEET_NAMES.QUESTIONS);
-  var hash = definitionHash(questions, settings);
+  var classes = rosterClasses_();
+  var hash = definitionHash(questions, settings, classes);
 
   var formId = props.getProperty(PROP_ACTIVE_FORM_ID);
   var form = null;
@@ -35,7 +36,7 @@ function buildOrVersionForm() {
     showFormInfo_(form, version);
     return;
   }
-  var spec = buildFormSpec(questions, settings);
+  var spec = buildFormSpec(questions, settings, classes);
 
   var oldForm = null;
   if (action === 'CREATE' || action === 'NEW_VERSION') {
@@ -61,6 +62,17 @@ function buildOrVersionForm() {
   showFormInfo_(form, version);
 }
 
+/** 名簿シートのクラスを、出てきた順に重複なく返す。名簿が無ければ空。 */
+function rosterClasses_() {
+  var seen = {};
+  var out = [];
+  readTable(SHEET_NAMES.ROSTER).forEach(function (r) {
+    var c = String(r.クラス || '').trim();
+    if (c !== '' && !seen[c]) { seen[c] = true; out.push(c); }
+  });
+  return out;
+}
+
 function fbIsTrue_(value) {
   return value === true || String(value).trim().toUpperCase() === 'TRUE';
 }
@@ -79,6 +91,11 @@ function populateForm_(form, spec, version) {
   // 先頭に氏名欄。採点の対象ではないが、誰の答案かを結果に出すため対応表に記録する
   var nameItem = form.addTextItem().setTitle(spec.nameItem.title).setRequired(spec.nameItem.required);
   mapping.push([version, form.getId(), NAME_QUESTION_ID, String(nameItem.getId()), now]);
+  if (spec.classItem) {
+    var classItem = form.addMultipleChoiceItem().setTitle(spec.classItem.title).setRequired(spec.classItem.required);
+    classItem.setChoices(spec.classItem.choices.map(function (c) { return classItem.createChoice(c); }));
+    mapping.push([version, form.getId(), CLASS_QUESTION_ID, String(classItem.getId()), now]);
+  }
   spec.items.forEach(function (it) {
     if (it.section_header) form.addSectionHeaderItem().setTitle(it.section_header);
     if (it.kind === 'INFO') {

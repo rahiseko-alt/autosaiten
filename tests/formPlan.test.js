@@ -94,3 +94,14 @@ test('説明の欄は答えのない項目になり、見出しと説明に分�
   assert.equal(spec.items[0].points, 0);
   assert.equal(spec.items[0].required, false);
 });
+
+test('クラスの一覧があれば、氏名欄の次に必須のクラス欄が付く', () => {
+  const spec = buildFormSpec([q()], settings, ['国際', '総合']);
+  assert.deepEqual(spec.classItem, { title: 'クラス（Class）', required: true, choices: ['国際', '総合'] });
+  assert.notEqual(definitionHash([q()], settings, ['国際', '総合']), definitionHash([q()], settings));
+});
+
+test('クラスの一覧が無ければクラス欄は付かない', () => {
+  assert.equal(buildFormSpec([q()], settings).classItem, null);
+  assert.equal(buildFormSpec([q()], settings, []).classItem, null);
+});
