@@ -22,6 +22,14 @@ test('割り当ての行が途中で消えても、直前の番号の次を振�
   assert.deepEqual(planAssignment([a('国際', 'A', 1), a('国際', 'C', 3)], '国際', 'D', 60), { number: 4, isNew: true });
 });
 
+test('割り当てシートを並べ替えても、いちばん新しく受け付けた番号の次を振る', () => {
+  const list = [
+    Object.assign(a('総合', 'B', 2), { 受付日時: new Date('2026-10-23T10:01:00+09:00') }),
+    Object.assign(a('国際', 'A', 1), { 受付日時: new Date('2026-10-23T10:00:00+09:00') })
+  ];
+  assert.deepEqual(planAssignment(list, '国際', 'C', 60), { number: 3, isNew: true });
+});
+
 test('用意した資料の数を超えたら1番に戻る', () => {
   const list = [a('国際', 'A', 1), a('国際', 'B', 2), a('国際', 'C', 3)];
   assert.deepEqual(planAssignment(list, '国際', 'D', 3), { number: 1, isNew: true });

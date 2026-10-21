@@ -48,11 +48,19 @@ function claimMaterial(cls, name) {
   return { number: plan.number, text: String(material.本文), formUrl: rcPrefilledFormUrl_(cls, name) };
 }
 
+var rcOpened_ = null;
+
+/** 1回の呼び出しの中では、開いたスプレッドシートを使い回す。 */
 function rcSpreadsheet_() {
-  if (typeof SPREADSHEET_ID === 'undefined' || !SPREADSHEET_ID) {
-    throw new Error('受付ページの準備ができていません（スプレッドシートの指定がありません）。先生に連絡してください');
+  if (rcOpened_) return rcOpened_;
+  var notReady = '受付ページの準備ができていません（スプレッドシートを開けません）。先生に連絡してください';
+  if (typeof SPREADSHEET_ID === 'undefined' || !/^[A-Za-z0-9_-]{20,}$/.test(String(SPREADSHEET_ID))) throw new Error(notReady);
+  try {
+    rcOpened_ = SpreadsheetApp.openById(SPREADSHEET_ID);
+  } catch (e) {
+    throw new Error(notReady);
   }
-  return SpreadsheetApp.openById(SPREADSHEET_ID);
+  return rcOpened_;
 }
 
 function rcReadTable_(sheetName) {
@@ -74,7 +82,9 @@ function rcReadTable_(sheetName) {
  * フォームを開くのは重いので、クラスごとに「氏名だけ差し替えればよいURL」を覚えておく。
  */
 function rcPrefilledFormUrl_(cls, name) {
-  var editUrl = String(rcSpreadsheet_().getSheetByName('Control').getRange(RC_CONTROL_EDIT_URL_).getValue());
+  var control = rcSpreadsheet_().getSheetByName('Control');
+  if (!control) return '';
+  var editUrl = String(control.getRange(RC_CONTROL_EDIT_URL_).getValue());
   var m = editUrl.match(/\/forms\/d\/([^/]+)/);
   if (!m) return '';
   var formId = m[1];
