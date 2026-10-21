@@ -2,7 +2,7 @@
  * 採点結果の書き込み。Results シートへの保存と、フォームへの書き戻し。
  */
 
-var RESULTS_TEXT_COLUMNS = ['respondent_email', 'question_text_snapshot', 'answer', 'grading_reason'];
+var RESULTS_TEXT_COLUMNS = ['respondent_email', 'question_text_snapshot', 'answer', 'grading_reason', 'respondent_name'];
 
 /** 既存の Results 行を、行番号つきで返す。 */
 function readResultsWithRows_() {

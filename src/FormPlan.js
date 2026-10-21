@@ -51,6 +51,9 @@ function buildFormSpec(questions, settings) {
     title: String(settings.FORM_TITLE || ''),
     description: String(settings.FORM_DESCRIPTION || ''),
     collectEmail: settings.COLLECT_EMAIL === true || String(settings.COLLECT_EMAIL).toUpperCase() === 'TRUE',
+    // 既定は1人1回。Settings で FALSE にしたときだけ外す
+    limitOneResponse: !(settings.LIMIT_ONE_RESPONSE === false || String(settings.LIMIT_ONE_RESPONSE).toUpperCase() === 'FALSE'),
+    nameItem: { title: '氏名（Name）', required: true },
     items: items
   };
 }

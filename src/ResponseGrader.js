@@ -35,7 +35,8 @@ function rgBaseRow_(response, q, settings, now) {
     answer: rgText_(response.answers[q.question_id]), grading_mode: q.grading_mode,
     auto_score: '', llm_score: '', manual_score: '', final_score: '', max_score: Number(q.points) || 0,
     status: '', confidence: '', grading_reason: '', provider: '', model: '', prompt_version: '',
-    rubric_id: '', rubric_version: '', graded_at: now
+    rubric_id: '', rubric_version: '', graded_at: now,
+    respondent_name: response.respondent_name || ''
   };
 }
 
@@ -71,6 +72,9 @@ function gradeResponse(input) {
       var g = gradeAuto_(q, answer);
       row.auto_score = g.score;
       row.status = g.status;
+      if (g.status === 'REVIEW_REQUIRED') {
+        row.grading_reason = '正答と一致しませんでした。別の言語で正しく答えている可能性があるため、意味で確認してください';
+      }
     } else if (q.grading_mode === 'MANUAL') {
       row.status = 'MANUAL_PENDING';
     }

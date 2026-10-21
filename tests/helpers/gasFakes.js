@@ -147,6 +147,7 @@ class FakeForm {
   /** 検査用: 学生が送信したことにする。 */
   submit(answersByTitle) { const r = new FakeResponse(this, 'resp' + (this.responses.length + 1), answersByTitle); this.responses.push(r); return r; }
 }
+FakeForm.prototype.setLimitOneResponsePerUser = function (v) { this.limitOne = v; return this; };
 ['setTitle', 'setDescription', 'setIsQuiz', 'setCollectEmail', 'setAllowResponseEdits', 'setDestination'].forEach((m) => {
   FakeForm.prototype[m] = function () { return this; };
 });

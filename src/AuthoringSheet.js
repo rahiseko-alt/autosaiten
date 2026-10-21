@@ -157,7 +157,7 @@ function setupResultsView_(ss) {
     .setFontWeight('bold').setBackground('#d9eaff');
   var status = '{"AUTO_GRADED","自動採点済み";"LLM_GRADED","AI採点済み";"REVIEW_REQUIRED","要確認";' +
     '"MANUAL_PENDING","採点待ち（記述）";"MANUAL_GRADED","手動採点済み";"UNANSWERED","未回答"}';
-  sheet.getRange('A2').setFormula('=IFNA(FILTER({Results!C2:C,Results!D2:D,Results!E2:E,Results!F2:F,Results!G2:G,' +
+  sheet.getRange('A2').setFormula('=IFNA(FILTER({Results!C2:C,ARRAYFORMULA(IF(Results!W2:W<>"",Results!W2:W,Results!D2:D)),Results!E2:E,Results!F2:F,Results!G2:G,' +
     'Results!L2:L,Results!M2:M,ARRAYFORMULA(IFNA(VLOOKUP(Results!N2:N,' + status + ',2,FALSE),Results!N2:N)),Results!P2:P},' +
     'Results!A2:A<>""),"")');
   sheet.getRange('A1:I1000').setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP).setVerticalAlignment('middle');

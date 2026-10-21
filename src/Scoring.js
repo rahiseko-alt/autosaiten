@@ -14,7 +14,7 @@ function scIsBlank_(v) {
 function resolveFinalScore(row) {
   if (!scIsBlank_(row.manual_score)) return { final_score: Number(row.manual_score), confirmed: true };
   if (row.status === 'UNANSWERED') return { final_score: 0, confirmed: true };
-  if (row.grading_mode === 'AUTO') return { final_score: Number(row.auto_score), confirmed: true };
+  if (row.grading_mode === 'AUTO') return { final_score: Number(row.auto_score), confirmed: row.status !== 'REVIEW_REQUIRED' };
   if (row.grading_mode === 'LLM') {
     var provisional = scIsBlank_(row.llm_score) ? null : Number(row.llm_score);
     return { final_score: provisional, confirmed: row.status === 'LLM_GRADED' };

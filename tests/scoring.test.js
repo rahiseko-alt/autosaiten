@@ -51,3 +51,8 @@ test('manual_score は0以上で配点以下の数値だけ有効', () => {
   assert.equal(validManualScore('abc', 5), false);
   assert.equal(validManualScore('', 5), false);
 });
+
+test('短答の要確認は、manual_score が入るまで確定しない', () => {
+  assert.deepEqual(resolveFinalScore({ grading_mode: 'AUTO', status: 'REVIEW_REQUIRED', auto_score: 0 }), { final_score: 0, confirmed: false });
+  assert.deepEqual(resolveFinalScore({ grading_mode: 'AUTO', status: 'REVIEW_REQUIRED', auto_score: 0, manual_score: 5 }), { final_score: 5, confirmed: true });
+});

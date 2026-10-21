@@ -148,6 +148,8 @@ function gradeJob_(job, settings, deps) {
     var qid = questionOfItem[String(ir.getItem().getId())];
     if (qid) answers[qid] = ir.getResponse();
   });
+  var respondentName = answers[NAME_QUESTION_ID] || '';
+  delete answers[NAME_QUESTION_ID];
   var mappedIds = {};
   Object.keys(questionOfItem).forEach(function (k) { mappedIds[questionOfItem[k]] = true; });
   // その版のフォームに載っていた問題は、今は掲載を外していても採点する
@@ -159,6 +161,7 @@ function gradeJob_(job, settings, deps) {
     response: {
       response_id: job.response_id, form_version: job.form_version,
       submitted_at: formResponse.getTimestamp(), respondent_email: formResponse.getRespondentEmail(),
+      respondent_name: respondentName,
       answers: answers
     },
     questions: questions,
