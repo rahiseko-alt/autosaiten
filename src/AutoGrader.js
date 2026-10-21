@@ -35,6 +35,44 @@ function agAsciiDigits_(text) {
   });
 }
 
+/** 文字の種類（言語のまとまり）。日本語は漢字・ひらがな・カタカナをまとめて1つとする。 */
+var AG_SCRIPTS_ = [
+  ['ja', /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u],
+  ['latin', /\p{Script=Latin}/u],
+  ['hangul', /\p{Script=Hangul}/u],
+  ['cyrillic', /\p{Script=Cyrillic}/u],
+  ['arabic', /\p{Script=Arabic}/u],
+  ['devanagari', /\p{Script=Devanagari}/u],
+  ['thai', /\p{Script=Thai}/u],
+  ['greek', /\p{Script=Greek}/u],
+  ['hebrew', /\p{Script=Hebrew}/u]
+];
+
+/** 文字列に含まれる文字の種類の一覧。数字・記号だけなら空。上の一覧に無い文字は 'other'。 */
+function agScripts_(text) {
+  var found = {};
+  Array.from(String(text)).forEach(function (ch) {
+    if (!/\p{L}/u.test(ch)) return;
+    for (var i = 0; i < AG_SCRIPTS_.length; i++) {
+      if (AG_SCRIPTS_[i][1].test(ch)) { found[AG_SCRIPTS_[i][0]] = true; return; }
+    }
+    found.other = true;
+  });
+  return Object.keys(found);
+}
+
+/** 回答に、正答側（正答・別解）に無い種類の文字があるか。あれば別の言語で答えている可能性がある。 */
+function agOtherScript_(answerText, acceptedTexts) {
+  var accepted = [];
+  acceptedTexts.forEach(function (t) { accepted = accepted.concat(agScripts_(t)); });
+  return agScriptOutside_(answerText, accepted);
+}
+
+/** 回答に、allowed に無い種類の文字があるか。 */
+function agScriptOutside_(answerText, allowed) {
+  return agScripts_(answerText).some(function (s) { return allowed.indexOf(s) < 0; });
+}
+
 /** 数として読む。読めなければ NaN。「3,14」は小数、「1,200」は桁区切りとみなす。 */
 function agParseNumber_(text) {
   var t = agAsciiDigits_(text).replace(/\s+/g, '');
@@ -65,7 +103,7 @@ function gradeAuto(question, answer) {
 
   var rule = String(question.auto_rule || '').trim();
   var correct = false;
-  // 一致しなくても、別の言語で正しく答えている可能性があるか（ADR 0008）
+  // 一致しなくても、正答と違う文字（別の言語）で正しく答えている可能性があるか（ADR 0008）
   var mayBeOtherLanguage = false;
 
   if (question.question_type === 'CHECKBOX') {
@@ -77,21 +115,21 @@ function gradeAuto(question, answer) {
       correct = text === normalizeText(question.correct_answer);
     } else if (rule === 'EXACT') {
       correct = text === normalizeText(question.correct_answer);
-      mayBeOtherLanguage = true;
+      mayBeOtherLanguage = agOtherScript_(text, [question.correct_answer]);
     } else if (rule === 'ANY_OF') {
       var accepted = [question.correct_answer].concat(agSplit_(question.alternatives));
       correct = accepted.some(function (a) { return text === normalizeText(a); });
-      mayBeOtherLanguage = true;
+      mayBeOtherLanguage = agOtherScript_(text, accepted);
     } else if (rule === 'CONTAINS') {
       var keywords = agSplit_(question.correct_answer).map(normalizeText);
       correct = keywords.length > 0 && keywords.every(function (k) { return text.indexOf(k) >= 0; });
-      mayBeOtherLanguage = true;
+      mayBeOtherLanguage = agOtherScript_(text, keywords);
     } else if (rule === 'NUMBER') {
       var value = agParseNumber_(text);
       var tolerance = Number(question.tolerance) || 0;
       correct = isFinite(value) && Math.abs(value - Number(question.correct_answer)) <= tolerance;
-      // 数として読めない回答（「二十五」「twenty-five」など）だけ、意味の確認に回す
-      mayBeOtherLanguage = !isFinite(value);
+      // 数として読めず、日本語以外の言葉で書かれた回答（twenty-five など）だけ意味の確認に回す
+      mayBeOtherLanguage = !isFinite(value) && agScriptOutside_(text, ['ja']);
     }
   }
   if (correct) return { score: max, max: max, status: 'AUTO_GRADED' };
