@@ -3,7 +3,7 @@
  *
  * 本番の受付（reception/）や採点の仕組み（src/）とは別の Apps Script プロジェクト。誰でも開けるウェブアプリでは
  * 末尾が _ でない関数はすべて画面から呼べるため、本番の関数はここに置かない（ADR 0009）。
- * スプレッドシートは名簿を読むだけ（権限も読み取りのみ）。割り当て・結果・キューには何も書かない。
+ * スプレッドシートは名簿を読むだけ（コードは読み取りの呼び出ししか使わない。SpreadsheetApp.openById は読み取り専用の権限では動かないため、権限の範囲は本番の受付と同じ）。割り当て・結果・キューには何も書かない。
  * 練習フォームは setupPracticeForm を教師が1回実行して作る。作ったフォームの番号はスクリプトプロパティに保存する。
  */
 
@@ -100,7 +100,7 @@ function prSpreadsheet_() {
   try {
     prOpened_ = SpreadsheetApp.openById(SPREADSHEET_ID);
   } catch (e) {
-    throw new Error(notReady);
+    throw new Error(notReady + ' [' + e.message + ']');
   }
   return prOpened_;
 }
