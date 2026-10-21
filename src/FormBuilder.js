@@ -108,7 +108,8 @@ function populateForm_(form, spec, version) {
     item.setTitle(it.title);
     if (it.help_text) item.setHelpText(it.help_text);
     item.setRequired(it.required);
-    item.setPoints(it.points);
+    // フォームは0点の設定を受け付けない（新しい項目は初めから0点）
+    if (it.points > 0) item.setPoints(it.points);
     applyFeedback_(item, it);
     mapping.push([version, form.getId(), it.question_id, String(item.getId()), now]);
   });

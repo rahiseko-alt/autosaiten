@@ -80,37 +80,37 @@ function rcReadTable_(sheetName) {
 /**
  * 氏名欄とクラス欄を入れた状態の、今のフォームのURL。作れなければ空（画面が先生への連絡を促す）。
  * フォームを開くのは重いので、クラスごとに「氏名だけ差し替えればよいURL」を覚えておく。
+ * 「これでOK」で項目が作り直されると項目の番号が変わるので、覚える鍵に項目の番号を含める。
  */
 function rcPrefilledFormUrl_(cls, name) {
   var control = rcSpreadsheet_().getSheetByName('Control');
   if (!control) return '';
-  var editUrl = String(control.getRange(RC_CONTROL_EDIT_URL_).getValue());
-  var m = editUrl.match(/\/forms\/d\/([^/]+)/);
+  var m = String(control.getRange(RC_CONTROL_EDIT_URL_).getValue()).match(/\/forms\/d\/([^/]+)/);
   if (!m) return '';
   var formId = m[1];
-  var placeholder = 'RCNAMEPLACEHOLDER';
-  var cache = CacheService.getScriptCache();
-  var key = 'prefill:' + formId + ':' + Utilities.base64EncodeWebSafe(Utilities.newBlob(cls).getBytes());
-  var template = cache.get(key);
-  if (!template) {
-    try {
-      template = rcBuildTemplate_(formId, cls, placeholder);
-    } catch (e) {
-      // 名簿にあってフォームに無いクラスなど。番号と資料は渡し、入口だけ出さない
-      return '';
-    }
-    if (!template) return '';
-    cache.put(key, template, RC_CACHE_SECONDS_);
-  }
-  return template.split(placeholder).join(encodeURIComponent(name));
-}
-
-function rcBuildTemplate_(formId, cls, placeholder) {
   var itemOf = {};
   rcReadTable_('FormMapping').forEach(function (r) {
     if (r.form_id === formId) itemOf[r.question_id] = Number(r.form_item_id);
   });
   if (!itemOf.__NAME__) return '';
+  var placeholder = 'RCNAMEPLACEHOLDER';
+  var cache = CacheService.getScriptCache();
+  var key = ['prefill', formId, itemOf.__NAME__, itemOf.__CLASS__ || 0,
+    Utilities.base64EncodeWebSafe(Utilities.newBlob(cls).getBytes())].join(':');
+  var template = cache.get(key);
+  if (!template) {
+    try {
+      template = rcBuildTemplate_(formId, itemOf, cls, placeholder);
+    } catch (e) {
+      // 名簿にあってフォームに無いクラスなど。番号と資料は渡し、入口だけ出さない
+      return '';
+    }
+    cache.put(key, template, RC_CACHE_SECONDS_);
+  }
+  return template.split(placeholder).join(encodeURIComponent(name));
+}
+
+function rcBuildTemplate_(formId, itemOf, cls, placeholder) {
   var form = FormApp.openById(formId);
   var response = form.createResponse()
     .withItemResponse(form.getItemById(itemOf.__NAME__).asTextItem().createResponse(placeholder));

@@ -63,10 +63,13 @@ function writeBackScores(formId, responseId, rows) {
     if (m.form_id === formId) itemOfQuestion[m.question_id] = Number(m.form_item_id);
   });
 
+  var noPoints = {};
+  rows.forEach(function (r) { if (r.status === 'NO_POINTS') noPoints[r.question_id] = true; });
   var graded = 0;
   scoresToWriteBack(rows).forEach(function (s) {
     var itemId = itemOfQuestion[s.question_id];
-    if (itemId === undefined) return;
+    // 加点なしの欄は採点の対象ではないので、点を付けない
+    if (itemId === undefined || noPoints[s.question_id]) return;
     var itemResponse = formResponse.getGradableResponseForItem(form.getItemById(itemId));
     if (!itemResponse) return; // 未回答の項目には点を付けられない
     itemResponse.setScore(s.score);

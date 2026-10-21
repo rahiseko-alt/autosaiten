@@ -338,3 +338,15 @@ test('新しい版を作る途中で Google が止まっても、旧フォーム
   assert.equal(env.forms.form1.accepting, false);
   assert.equal(control(env, 'FORM_VERSION'), 2);
 });
+
+test('説明の欄と配点0の記述があってもフォームができ、説明の欄は対応表に載らない', () => {
+  const env = prepare({}, [
+    A('以下のファイルをファクトチェックしてください。', '記述', 8, '', '', '', '観点'),
+    [true, 'ただし書き', '説明', '', '', '', '', '', false, ''],
+    A('タグの名前を決めてください。', '記述', 0, '', '', '', '加点なし')
+  ]);
+  pressOk(env);
+  assert.equal(control(env, 'STATUS'), 'READY');
+  const ids = env.ss.getSheetByName('FormMapping').rows.slice(1).map((r) => r[2]);
+  assert.deepEqual(ids, ['__NAME__', 'Q001', 'Q003']);
+});

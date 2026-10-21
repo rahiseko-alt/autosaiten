@@ -101,7 +101,7 @@ class FakeItem {
   getId() { return this.id; }
   setTitle(t) { this.title = t; return this; }
   setRequired() { return this; }
-  setPoints(p) { this.points = p; return this; }
+  setPoints(p) { if (!(p > 0)) throw new Error('フォームを更新するデータが無効です。'); this.points = p; return this; }
   setChoices(c) { this.choices = c; return this; }
   createChoice(value, correct) { return { value, correct }; }
   setFeedbackForCorrect() { return this; }
