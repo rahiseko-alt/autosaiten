@@ -8,6 +8,23 @@
 
 ---
 
+## 2026-10-21 練習の受付ページを Google に公開した
+
+**決めたこと**
+
+- 練習のプロジェクト https://script.google.com/d/1rwHcwXApq6m4zbxLqGsIS4_xhbohdKEyJIT8HF7Vb_qi6sG1OMdbahEX/edit 、デプロイ ID `AKfycbzrCATt9LViMNV_Kxl0wCDGsD3dYTY7IGsF8NYu-AgGD7dCfuDJLADOjYeQQCw4Z-8x`（更新は `clasp deploy -i` にこの ID）。学生に配る練習のURL: https://script.google.com/macros/s/AKfycbzrCATt9LViMNV_Kxl0wCDGsD3dYTY7IGsF8NYu-AgGD7dCfuDJLADOjYeQQCw4Z-8x/exec
+- 利用者のパソコンでは `C:\Users\user\autosaiten-practice\autosaiten-main\practice` に置いた（`.clasp.json` はここにある）。本番のスプレッドシートは「AI Grader」
+- `clasp push` の案内は、ZIP の直リンクと PowerShell の1行にし、実際に貼った1行は引き継ぎメモに残す
+
+**次にやること**
+
+- 先生が練習プロジェクトのエディタで `setupPracticeForm` を1回実行し、権限を許可する（練習フォームができる）。これを済ませるまで学生に配らない
+- `practice/README.md` の動作確認の一覧を確かめてから学生に配る
+
+**未解決の問題**
+
+- 練習の Google 上での動作は未確認
+
 ## 2026-10-21 練習の受付ページとフォームを取り込んだ（PR #38）
 
 **決めたこと**
@@ -85,23 +102,4 @@
 - 名簿の書き写し（国際29・総合28・灰色だった総合14）は利用者の確認待ち
 - 実際の Google 上での動作は未確認。60人同時の挙動も未確認
 - 見直し待ちの #3 #4 #15、「フォームの回答 N」シートが見えたまま
-
-## 2026-10-21 受付ページ方式の実装と途中確認（GO）
-
-**決めたこと**
-
-- 学生の見分けはメールではなく、受付ページでクラスと名簿の名前を選ぶ方式（Gmail では開いた人のメールを受け取れないため）。ログインは不要
-- 計画書 #29、小分け #31〜#34。実装は下書きの PR #28 に入っている。途中確認は GO
-- スプレッドシートに名簿・資料（60通り、本文は O2 のひな形から数式で作る）・割り当てシートを用意し、時刻を日本時間にした。試験作成の Q005・説明欄・タグ名の欄・フォームの説明は書き換え済み
-
-**次にやること**
-
-- /conduct の「仕上げの確認」から続ける（#31〜#34 を閉じ、PR #28 を最終確認へ）
-- 最終確認の GO 後に PR #28 を取り込み、利用者が clasp push → 初期セットアップ → clasp deploy → 「これでOK」の順に行う。受付ページのURLを学生に配る
-
-**未解決の問題**
-
-- 名簿の書き写し（国際29・総合28の長い名前、灰色だった総合14）は利用者の確認待ち
-- 実際の Google 上での受付ページの動作は未確認
-- 見直し待ちの #3 #4 #15・#30、「フォームの回答 N」シートが見えたまま
 
