@@ -22,6 +22,9 @@ function setupSystem() {
   setupMissingInputHighlights_(ss);
   INTERNAL_SHEETS.forEach(function (name) { protectInternal_(ss.getSheetByName(name)); });
 
+  setupReceptionSheets_(ss);
+  rememberIds_(PropertiesService.getDocumentProperties().getProperty(PROP_ACTIVE_FORM_ID));
+
   var authoring = setupAuthoringSheet_(ss);
   setupResultsView_(ss);
   ss.setActiveSheet(authoring);
@@ -30,6 +33,18 @@ function setupSystem() {
   installRequiredTriggers();
   writeLog('INFO', 'SETUP_COMPLETED', '', '初期セットアップが完了しました');
   ss.toast('初期セットアップが完了しました。API キーは Script Properties に別途設定してください。', 'AI Grader', 8);
+}
+
+/** 受付ページが使う名簿・資料・割り当てのシート。名簿と資料は先生（と Claude）が入れる。 */
+function setupReceptionSheets_(ss) {
+  [[SHEET_NAMES.ROSTER, ROSTER_HEADERS], [SHEET_NAMES.MATERIALS, MATERIAL_HEADERS], [SHEET_NAMES.ASSIGNMENTS, ASSIGNMENT_HEADERS]]
+    .forEach(function (pair) {
+      var sheet = ss.getSheetByName(pair[0]) || ss.insertSheet(pair[0]);
+      if (sheet.getLastRow() === 0) sheet.getRange(1, 1, 1, pair[1].length).setValues([pair[1]]);
+      sheet.getRange(1, 1, 1, pair[1].length).setFontWeight('bold').setBackground('#d9eaff');
+      sheet.setFrozenRows(1);
+    });
+  protectInternal_(ss.getSheetByName(SHEET_NAMES.ASSIGNMENTS));
 }
 
 function writeHeader_(sheet, headers) {

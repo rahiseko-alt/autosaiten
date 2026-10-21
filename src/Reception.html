@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  body { font-family: sans-serif; margin: 16px; line-height: 1.6; color: #222; background: #fff; }
+  h1 { font-size: 20px; }
+  select, button { font-size: 16px; padding: 8px; margin: 6px 0; width: 100%; max-width: 480px; }
+  button { background: #1a73e8; color: #fff; border: none; border-radius: 4px; }
+  button:disabled { background: #999; }
+  #material { white-space: pre-wrap; border: 1px solid #ccc; padding: 12px; background: #fafafa; }
+  .hidden { display: none; }
+  .error { color: #c00; }
+  .formlink { display: inline-block; margin: 12px 0; padding: 10px 16px; background: #188038; color: #fff; text-decoration: none; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>受付 / Reception</h1>
+<div id="pick">
+  <label>クラス / Class<br><select id="cls"><option value="">読み込み中…</option></select></label><br>
+  <label>名前 / Name<br><select id="name" disabled><option value="">先にクラスを選んでください</option></select></label><br>
+  <button id="go" disabled>資料を受け取る / Get material</button>
+</div>
+<p id="msg"></p>
+<div id="result" class="hidden">
+  <p>資料番号 / Material No.: <strong id="no"></strong></p>
+  <a id="formlink" class="formlink" href="#" target="_blank">回答フォームへ / Go to the answer form</a>
+  <div id="material"></div>
+</div>
+<script>
+  var roster = [];
+  var tries = 0;
+  function el(id) { return document.getElementById(id); }
+  function say(text, isError) { el('msg').textContent = text; el('msg').className = isError ? 'error' : ''; }
+  // 大勢が同時に開くと失敗することがあるので、数秒おいて自動でやり直す
+  function call(fn, args, ok) {
+    var runner = google.script.run.withSuccessHandler(function (v) { tries = 0; ok(v); })
+      .withFailureHandler(function (e) {
+        var text = String(e && e.message || e);
+        if (/名簿にない|資料/.test(text) || tries >= 5) { tries = 0; say(text, true); el('go').disabled = false; return; }
+        tries += 1;
+        say('混み合っています。自動でやり直しています… (' + tries + ')', false);
+        setTimeout(function () { call(fn, args, ok); }, 1500 + Math.random() * 2500);
+      });
+    runner[fn].apply(runner, args);
+  }
+  function fillNames() {
+    var group = roster.filter(function (g) { return g.name === el('cls').value; })[0];
+    var sel = el('name');
+    sel.innerHTML = '';
+    if (!group) { sel.disabled = true; el('go').disabled = true; return; }
+    var first = document.createElement('option');
+    first.value = ''; first.textContent = '選んでください / Select';
+    sel.appendChild(first);
+    group.students.forEach(function (s) { var o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o); });
+    sel.disabled = false;
+    el('go').disabled = true;
+  }
+  call('getReceptionRoster', [], function (list) {
+    roster = list;
+    var sel = el('cls');
+    sel.innerHTML = '';
+    var first = document.createElement('option');
+    first.value = ''; first.textContent = '選んでください / Select';
+    sel.appendChild(first);
+    list.forEach(function (g) { var o = document.createElement('option'); o.value = g.name; o.textContent = g.name; sel.appendChild(o); });
+  });
+  el('cls').addEventListener('change', fillNames);
+  el('name').addEventListener('change', function () { el('go').disabled = el('name').value === ''; });
+  el('go').addEventListener('click', function () {
+    el('go').disabled = true;
+    say('準備しています… / Preparing…', false);
+    call('claimMaterial', [el('cls').value, el('name').value], function (r) {
+      say('', false);
+      el('pick').className = 'hidden';
+      el('no').textContent = r.number;
+      el('material').textContent = r.text;
+      if (r.formUrl) el('formlink').href = r.formUrl; else el('formlink').className = 'hidden';
+      el('result').className = '';
+    });
+  });
+</script>
+</body>
+</html>
