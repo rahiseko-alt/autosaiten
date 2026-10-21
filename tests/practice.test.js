@@ -26,7 +26,7 @@ test('名簿にクラスがなければ、フォームを作らず先生に知�
   assert.throws(() => practiceFormSpec([]), /名簿/);
 });
 
-test('練習の資料は本文が空でなく、資料番号の欄を持たない', () => {
+test('練習の資料は本文が空でなく、いつも同じ本文を返す', () => {
   const text = practiceMaterial();
   assert.equal(typeof text, 'string');
   assert.ok(text.trim().length > 0);

@@ -40,42 +40,55 @@ function setupPracticeForm() {
   try {
     var props = PropertiesService.getScriptProperties();
     var plan = planFormSetup({ formId: props.getProperty(PR_PROP_FORM_) });
-    if (plan.action === 'reuse') return FormApp.openById(plan.formId).getPublishedUrl();
+    if (plan.action === 'reuse') {
+      try {
+        return FormApp.openById(plan.formId).getPublishedUrl();
+      } catch (e) {
+        throw new Error('保存した練習フォームが見つかりません（削除された可能性があります）。スクリプトプロパティの practiceFormId・practiceNameItemId・practiceClassItemId を消してから、もう一度実行してください');
+      }
+    }
 
     var spec = practiceFormSpec(getPracticeRoster().map(function (g) { return g.name; }));
-    var form = FormApp.create(spec.title);
-    form.setDescription(spec.description);
-    form.setIsQuiz(spec.isQuiz);
-    form.setCollectEmail(spec.collectEmail);
-    form.setAllowResponseEdits(spec.allowResponseEdits);
-    form.setLimitOneResponsePerUser(spec.limitOneResponse);
-    form.setAcceptingResponses(true);
-
-    var nameItem = form.addTextItem().setTitle(spec.nameItem.title).setRequired(spec.nameItem.required);
-    var classItem = form.addMultipleChoiceItem().setTitle(spec.classItem.title).setRequired(spec.classItem.required);
-    classItem.setChoices(spec.classItem.choices.map(function (c) { return classItem.createChoice(c); }));
-    spec.items.forEach(function (it) {
-      var item;
-      if (it.kind === 'INFO') item = form.addSectionHeaderItem();
-      else if (it.kind === 'PARAGRAPH') item = form.addParagraphTextItem().setRequired(it.required);
-      else item = form.addTextItem().setRequired(it.required);
-      item.setTitle(it.title);
-      if (it.help_text) item.setHelpText(it.help_text);
-    });
-
-    props.setProperties(
-      (function () {
-        var o = {};
-        o[PR_PROP_FORM_] = form.getId();
-        o[PR_PROP_NAME_ITEM_] = String(nameItem.getId());
-        o[PR_PROP_CLASS_ITEM_] = String(classItem.getId());
-        return o;
-      })()
-    );
-    return form.getPublishedUrl();
+    var built;
+    try {
+      built = prBuildForm_(spec);
+    } catch (e) {
+      throw new Error('練習フォームの作成に失敗しました。Googleドライブに「' + spec.title + '」ができていたら消してから、もう一度実行してください（' + e.message + '）');
+    }
+    props.setProperties(built.saved);
+    return built.form.getPublishedUrl();
   } finally {
     lock.releaseLock();
   }
+}
+
+/** フォームを作って項目を足す。作ったフォームと、保存する値（フォームIDと氏名欄・クラス欄の項目番号）を返す。 */
+function prBuildForm_(spec) {
+  var form = FormApp.create(spec.title);
+  form.setDescription(spec.description);
+  form.setIsQuiz(spec.isQuiz);
+  form.setCollectEmail(spec.collectEmail);
+  form.setAllowResponseEdits(spec.allowResponseEdits);
+  form.setLimitOneResponsePerUser(spec.limitOneResponse);
+  form.setAcceptingResponses(true);
+
+  var nameItem = form.addTextItem().setTitle(spec.nameItem.title).setRequired(spec.nameItem.required);
+  var classItem = form.addMultipleChoiceItem().setTitle(spec.classItem.title).setRequired(spec.classItem.required);
+  classItem.setChoices(spec.classItem.choices.map(function (c) { return classItem.createChoice(c); }));
+  spec.items.forEach(function (it) {
+    var item;
+    if (it.kind === 'INFO') item = form.addSectionHeaderItem();
+    else if (it.kind === 'PARAGRAPH') item = form.addParagraphTextItem().setRequired(it.required);
+    else item = form.addTextItem().setRequired(it.required);
+    item.setTitle(it.title);
+    if (it.help_text) item.setHelpText(it.help_text);
+  });
+
+  var saved = {};
+  saved[PR_PROP_FORM_] = form.getId();
+  saved[PR_PROP_NAME_ITEM_] = String(nameItem.getId());
+  saved[PR_PROP_CLASS_ITEM_] = String(classItem.getId());
+  return { form: form, saved: saved };
 }
 
 var prOpened_ = null;
