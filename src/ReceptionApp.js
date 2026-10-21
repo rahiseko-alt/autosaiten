@@ -9,7 +9,7 @@ var ASSIGNMENT_HEADERS = ['クラス', '氏名', '資料番号', '受付日時']
 var ROSTER_HEADERS = ['クラス', 'No.', '氏名', '呼び名'];
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Reception')
+  return HtmlService.createHtmlOutputFromFile('ReceptionPage')
     .setTitle('受付')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -62,10 +62,10 @@ function prefilledFormUrl_(cls, name) {
   });
   var response = form.createResponse();
   if (itemOf[NAME_QUESTION_ID]) {
-    response.withItemResponse(form.getItemById(itemOf[NAME_QUESTION_ID]).asTextItem().createResponse(name));
+    response.withItemResponse(form.getItemById(Number(itemOf[NAME_QUESTION_ID])).asTextItem().createResponse(name));
   }
   if (itemOf[CLASS_QUESTION_ID]) {
-    response.withItemResponse(form.getItemById(itemOf[CLASS_QUESTION_ID]).asMultipleChoiceItem().createResponse(cls));
+    response.withItemResponse(form.getItemById(Number(itemOf[CLASS_QUESTION_ID])).asMultipleChoiceItem().createResponse(cls));
   }
   return response.toPrefilledUrl();
 }
