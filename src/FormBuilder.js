@@ -67,10 +67,14 @@ function populateForm_(form, spec, version) {
   form.setIsQuiz(true);
   form.setCollectEmail(spec.collectEmail);
   form.setAllowResponseEdits(false);
+  form.setLimitOneResponsePerUser(spec.limitOneResponse);
   form.setAcceptingResponses(true);
 
   var now = new Date();
   var mapping = [];
+  // 先頭に氏名欄。採点の対象ではないが、誰の答案かを結果に出すため対応表に記録する
+  var nameItem = form.addTextItem().setTitle(spec.nameItem.title).setRequired(spec.nameItem.required);
+  mapping.push([version, form.getId(), NAME_QUESTION_ID, String(nameItem.getId()), now]);
   spec.items.forEach(function (it) {
     if (it.section_header) form.addSectionHeaderItem().setTitle(it.section_header);
     var item = addItem_(form, it);

@@ -76,7 +76,7 @@ test('「これでOK」でフォームができ、READY になり、対応表と
   assert.ok(String(control(env, 'FORM_URL')).startsWith('https://forms.example/'));
   assert.equal(control(env, 'FORM_VERSION'), 1);
   assert.equal(control(env, 'TOTAL_POINTS'), 10);
-  assert.equal(env.ss.getSheetByName('FormMapping').getLastRow(), 3);
+  assert.equal(env.ss.getSheetByName('FormMapping').getLastRow(), 4); // 見出し + 氏名欄 + 2問
   assert.equal(Object.keys(env.forms).length, 1);
 });
 
@@ -127,7 +127,7 @@ test('初期セットアップで試験作成と結果のシートが前に並�
   ['Control', 'Questions', 'Rubrics', 'Settings', 'Results', 'Queue', 'FormMapping', 'Logs']
     .forEach((n) => assert.equal(env.ss.getSheetByName(n).isSheetHidden(), true, n));
   assert.equal(env.ss.getSheetByName('試験作成').isSheetHidden(), false);
-  assert.ok(String(env.ss.getSheetByName('結果').cell(2, 1)).startsWith('=IFNA(FILTER({Results!C2:C,Results!D2:D,Results!E2:E,Results!F2:F,Results!G2:G,Results!L2:L,Results!M2:M,'));
+  assert.ok(String(env.ss.getSheetByName('結果').cell(2, 1)).startsWith('=IFNA(FILTER({Results!C2:C,ARRAYFORMULA(IF(Results!W2:W<>"",Results!W2:W,Results!D2:D)),Results!E2:E,Results!F2:F,Results!G2:G,Results!L2:L,Results!M2:M,'));
 });
 
 test('既に Questions にある問題は、初めて試験作成シートを作るときに引っ越す', () => {
@@ -167,14 +167,14 @@ test('回答が無いフォームは、同じフォームのまま同期され�
   pressOk(env);
   assert.equal(Object.keys(env.forms).length, 1);
   assert.equal(control(env, 'FORM_VERSION'), 1);
-  assert.equal(env.ss.getSheetByName('FormMapping').getLastRow(), 3);
+  assert.equal(env.ss.getSheetByName('FormMapping').getLastRow(), 4);
 });
 
 test('掲載を外した問題はフォームに載らない', () => {
   const env = prepare();
   env.ss.getSheetByName('試験作成').put(12, 1, false);
   pressOk(env);
-  assert.equal(env.forms.form1.items.filter((i) => i.kind !== 'SECTION').length, 1);
+  assert.equal(env.forms.form1.items.filter((i) => i.kind !== 'SECTION' && i.title !== '氏名（Name）').length, 1);
 });
 
 test('送信から採点・確定・フォームへの書き戻しまで通る', () => {
@@ -283,4 +283,41 @@ test('試験作成と結果を手で隠していても、セットアップを�
   env.ss.getSheetByName('結果').hideSheet();
   env.ctx.setupSystem();
   assert.equal(env.ss.getSheetByName('試験作成').isSheetHidden(), false);
+});
+
+test('フォームの先頭に必須の氏名欄が入り、1人1回に制限される', () => {
+  const env = prepare();
+  pressOk(env);
+  const form = env.forms.form1;
+  assert.equal(form.items[0].title, '氏名（Name）');
+  assert.equal(form.limitOne, true);
+});
+
+test('氏名は結果の回答者に入り、採点の対象にはならない', () => {
+  const env = prepare();
+  pressOk(env);
+  env.forms.form1.submit({ '氏名（Name）': 'Nguyen Van A', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.ctx.processGradingQueue();
+  const results = env.ss.getSheetByName('Results');
+  assert.equal(results.getLastRow(), 3); // 氏名は行にならない
+  assert.equal(results.cell(2, 23), 'Nguyen Van A');
+  assert.equal(env.forms.form1.submitted[0][0].grades.length, 2);
+});
+
+test('別の言語の短答は要確認になり、Claude が意味で確かめるまで書き戻さない', () => {
+  const env = prepare();
+  pressOk(env);
+  env.forms.form1.submit({ '氏名（Name）': 'Kim', '日本の首都は？': 'Tokyo', '4PのPriceを選べ': 'Price' });
+  env.ctx.processGradingQueue();
+  assert.equal(env.forms.form1.submitted.length, 0);
+  assert.equal(env.ss.getSheetByName('Queue').cell(2, 5), 'REVIEW_REQUIRED');
+  const results = env.ss.getSheetByName('Results');
+  let row = 0;
+  for (let r = 2; r <= 3; r++) if (results.cell(r, 5) === 'Q001') row = r;
+  assert.equal(results.cell(row, 14), 'REVIEW_REQUIRED');
+  assert.ok(String(results.cell(row, 16)).includes('別の言語'));
+  results.put(row, 11, 5); // Claude が「Tokyo」は正答と同じと判断
+  env.ctx.finalizeManualGrades();
+  assert.equal(env.forms.form1.submitted.length, 1);
+  assert.deepEqual(env.forms.form1.submitted[0][0].grades.map((g) => g.score).sort(), [5, 5]);
 });

@@ -36,7 +36,8 @@ var SHEET_HEADERS = {
   Settings: ['key', 'value', '説明'],
   Results: ['response_id', 'form_version', 'submitted_at', 'respondent_email', 'question_id', 'question_text_snapshot',
     'answer', 'grading_mode', 'auto_score', 'llm_score', 'manual_score', 'final_score', 'max_score', 'status',
-    'confidence', 'grading_reason', 'provider', 'model', 'prompt_version', 'rubric_id', 'rubric_version', 'graded_at'],
+    'confidence', 'grading_reason', 'provider', 'model', 'prompt_version', 'rubric_id', 'rubric_version', 'graded_at',
+    'respondent_name'],
   Queue: ['job_id', 'response_id', 'form_id', 'form_version', 'status', 'retry_count', 'next_run_at',
     'created_at', 'updated_at', 'last_error'],
   FormMapping: ['form_version', 'form_id', 'question_id', 'form_item_id', 'created_at'],
@@ -82,8 +83,13 @@ var DEFAULT_SETTINGS = [
   ['COLLECT_EMAIL', false, 'Forms設定'],
   ['FORM_TITLE', 'AIビジネス専門学校 テスト', 'タイトル'],
   ['FORM_DESCRIPTION', '', '説明'],
-  ['PROMPT_VERSION', 1, '採点プロンプト版']
+  ['PROMPT_VERSION', 1, '採点プロンプト版'],
+  ['LIMIT_ONE_RESPONSE', true, '1人1回の回答に制限する（学生は Google ログインが必要）']
 ];
+
+/** フォーム先頭の氏名欄。FormMapping ではこの番号で記録し、採点の対象にはしない。 */
+var NAME_QUESTION_ID = '__NAME__';
+var NAME_ITEM_TITLE = '氏名（Name）';
 
 var QUESTION_TYPES = ['SHORT_TEXT', 'PARAGRAPH', 'MULTIPLE_CHOICE', 'CHECKBOX', 'DROPDOWN'];
 var GRADING_MODES = ['AUTO', 'LLM', 'MANUAL'];

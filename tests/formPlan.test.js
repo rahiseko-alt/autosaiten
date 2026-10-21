@@ -69,3 +69,10 @@ test('フォーム仕様: タイトル・説明・メール収集と、question_
   assert.deepEqual([spec.title, spec.description, spec.collectEmail], ['テスト', '説明', true]);
   assert.deepEqual([spec.items[0].question_id, spec.items[0].feedback_correct, spec.items[0].feedback_incorrect], ['Q001', 'よし', 'ざんねん']);
 });
+
+test('フォーム仕様: 既定で1人1回に制限し、先頭に必須の氏名欄を置く', () => {
+  const spec = buildFormSpec([q()], settings);
+  assert.equal(spec.limitOneResponse, true);
+  assert.deepEqual(spec.nameItem, { title: '氏名（Name）', required: true });
+  assert.equal(buildFormSpec([q()], Object.assign({}, settings, { LIMIT_ONE_RESPONSE: 'FALSE' })).limitOneResponse, false);
+});
