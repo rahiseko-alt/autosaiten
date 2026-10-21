@@ -99,3 +99,13 @@ test('再採点は既存の行を更新し、教師が入れた manual_score を
   assert.equal(q3.row.final_score, 6);
   assert.equal(merged.filter((m) => m.existed).length, 1);
 });
+
+test('配点0の記述は加点なしで0点確定になり、回答全体の確定を妨げない', () => {
+  const tag = { enabled: true, question_id: 'Q007', question_text: 'タグ名', question_type: 'PARAGRAPH', points: 0, grading_mode: 'MANUAL' };
+  const out = gradeResponse({ response: Object.assign({}, response, { answers: { Q001: '東京', Q007: '曖昧' } }),
+    questions: [questions[0], tag], rubrics, settings, provider: llmOk(), now });
+  const row = out.rows.find((r) => r.question_id === 'Q007');
+  assert.equal(row.status, 'NO_POINTS');
+  assert.equal(row.final_score, 0);
+  assert.equal(out.finalized, true);
+});

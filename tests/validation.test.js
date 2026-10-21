@@ -137,3 +137,8 @@ test('LLM の問題があるのに、まだ使えない提供元を選んでい�
   assert.ok(run([llmQ], { settings: openai }).some(e => e.includes('OPENAI') && e.includes('まだ使えません')));
   assert.deepEqual(run([q()], { settings: openai }), []);
 });
+
+test('説明の欄は配点・正答なしで通る', () => {
+  const info = q({ question_id: 'Q002', question_type: 'INFO', grading_mode: 'NONE', auto_rule: '', correct_answer: '', points: '' });
+  assert.deepEqual(validateConfiguration({ questions: [q(), info], rubrics, settings }), []);
+});

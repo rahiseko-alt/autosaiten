@@ -11,7 +11,9 @@ var AUTHORING_KINDS = {
   記述: { question_type: 'PARAGRAPH', grading_mode: 'MANUAL', auto_rule: '' },
   選択: { question_type: 'MULTIPLE_CHOICE', grading_mode: 'AUTO', auto_rule: 'NATIVE' },
   複数選択: { question_type: 'CHECKBOX', grading_mode: 'AUTO', auto_rule: 'NATIVE' },
-  プルダウン: { question_type: 'DROPDOWN', grading_mode: 'AUTO', auto_rule: 'NATIVE' }
+  プルダウン: { question_type: 'DROPDOWN', grading_mode: 'AUTO', auto_rule: 'NATIVE' },
+  // 答えのない欄。フォームには見出しと説明だけが出て、採点しない
+  説明: { question_type: 'INFO', grading_mode: 'NONE', auto_rule: '' }
 };
 
 function auBlank_(v) {

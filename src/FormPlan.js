@@ -4,7 +4,7 @@
 
 var FORM_PLAN_TYPE_KIND_ = {
   SHORT_TEXT: 'TEXT', PARAGRAPH: 'PARAGRAPH', MULTIPLE_CHOICE: 'MULTIPLE_CHOICE',
-  CHECKBOX: 'CHECKBOX', DROPDOWN: 'DROPDOWN'
+  CHECKBOX: 'CHECKBOX', DROPDOWN: 'DROPDOWN', INFO: 'INFO'
 };
 
 function fpSplit_(value) {
@@ -43,8 +43,8 @@ function buildFormSpec(questions, settings) {
       kind: FORM_PLAN_TYPE_KIND_[q.question_type],
       title: cut < 0 ? text : text.slice(0, cut).trim(),
       help_text: cut < 0 ? '' : text.slice(cut + 1).trim(),
-      required: fpRequired_(q),
-      points: Number(q.points) || 0,
+      required: q.question_type === 'INFO' ? false : fpRequired_(q),
+      points: q.question_type === 'INFO' ? 0 : (Number(q.points) || 0),
       choices: choices,
       section_header: header,
       feedback_correct: String(q.feedback_correct || ''),

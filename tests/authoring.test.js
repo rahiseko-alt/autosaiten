@@ -118,3 +118,10 @@ test('裏方だけの設定を同じ問題番号から引き継ぎ、消えた�
   assert.deepEqual([merged[1].grading_mode, merged[1].rubric_id], ['LLM', 'R1']);
   assert.deepEqual([merged[2].question_id, merged[2].enabled, merged[2].question_text], ['Q009', false, '消えた問題']);
 });
+
+test('種類「説明」は答えのない欄になり、配点も正答も要らない', () => {
+  const { rows, errors } = toQuestionRows([row({ 種類: '説明', 配点: '', 正答: '', 別解: '', 必須: false, 問題番号: 'Q006' })]);
+  assert.deepEqual(errors, []);
+  assert.equal(rows[0].question_type, 'INFO');
+  assert.equal(rows[0].grading_mode, 'NONE');
+});

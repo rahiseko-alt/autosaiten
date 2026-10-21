@@ -81,6 +81,12 @@ function populateForm_(form, spec, version) {
   mapping.push([version, form.getId(), NAME_QUESTION_ID, String(nameItem.getId()), now]);
   spec.items.forEach(function (it) {
     if (it.section_header) form.addSectionHeaderItem().setTitle(it.section_header);
+    if (it.kind === 'INFO') {
+      // 答えのない説明の欄。採点しないので対応表には記録しない
+      var info = form.addSectionHeaderItem().setTitle(it.title);
+      if (it.help_text) info.setHelpText(it.help_text);
+      return;
+    }
     var item = addItem_(form, it);
     item.setTitle(it.title);
     if (it.help_text) item.setHelpText(it.help_text);
