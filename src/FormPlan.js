@@ -35,10 +35,14 @@ function buildFormSpec(questions, settings) {
     var choices = fpSplit_(q.options).map(function (value) {
       return { value: value, correct: nativeChoice && correct.indexOf(value) >= 0 };
     });
+    // フォームの質問の見出しは1行しか出ないので、最初の改行より後ろは見出しの下の説明欄に入れる
+    var text = String(q.question_text).replace(/\r\n?/g, '\n');
+    var cut = text.indexOf('\n');
     return {
       question_id: String(q.question_id),
       kind: FORM_PLAN_TYPE_KIND_[q.question_type],
-      title: String(q.question_text),
+      title: cut < 0 ? text : text.slice(0, cut).trim(),
+      help_text: cut < 0 ? '' : text.slice(cut + 1).trim(),
       required: fpRequired_(q),
       points: Number(q.points) || 0,
       choices: choices,
