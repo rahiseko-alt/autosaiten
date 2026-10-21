@@ -37,6 +37,7 @@
 2. このリポジトリで `npm install -g @google/clasp`、`clasp login`、`cp .clasp.json.example .clasp.json`（スクリプトIDを書く）、`clasp push`
 3. スプレッドシートを開き直し、メニュー「AI Grader > 初期セットアップ」を実行して権限を許可する
 4. LLM 採点を使うなら、次の「LLM 採点の準備」をする
+5. 受付ページ（学生ごとに数字違いの資料を配る）を使うなら、`clasp deploy` で公開し、出てきたデプロイ ID から `https://script.google.com/macros/s/<デプロイID>/exec` を学生に配る。名簿シート（クラス・No.・氏名・呼び名）と資料シート（資料番号・本文・正解）を埋めておく
 
 Apps Script エディタでコードを直接直さないでください（正本は GitHub です。これは運用上の約束で、技術的に強制されてはいません）。
 
