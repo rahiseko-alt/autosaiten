@@ -17,7 +17,7 @@
 
 **次にやること**
 
-- 利用者が新しい ZIP で `clasp push`（採点の仕組み）→ `reception/` で clasp create（初回だけ）・push・deploy を行う。出たデプロイ ID をここに書き残す
+- 済：clasp push と受付ページの作成・公開。受付ページのプロジェクト https://script.google.com/d/1mQfzwok1mb8II77INOfjjGMRPczKhLh4mofoKLM-EaVolhzxm0p4Y0bo/edit 、デプロイ ID `AKfycbwnhTcsklCA8HVk7cRbuke00CGPUgV4fZLS6ALl8nY0cq_kEFLGvxQnhd4X5B2FmkYyGA`（更新は `clasp deploy -i` にこの ID）。学生に配るURL: https://script.google.com/macros/s/AKfycbwnhTcsklCA8HVk7cRbuke00CGPUgV4fZLS6ALl8nY0cq_kEFLGvxQnhd4X5B2FmkYyGA/exec
 - 先生が受付ページの URL を一度開いて権限を許可し、「これでOK」を押して新しい版のフォーム（クラス欄・説明欄・タグ名の欄つき）を作る
 - 受付ページで1人分を試し、資料・入口のリンク・割り当てシートの記録を確かめてから学生に配る
 
