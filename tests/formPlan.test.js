@@ -70,6 +70,14 @@ test('フォーム仕様: タイトル・説明・メール収集と、question_
   assert.deepEqual([spec.items[0].question_id, spec.items[0].feedback_correct, spec.items[0].feedback_incorrect], ['Q001', 'よし', 'ざんねん']);
 });
 
+test('フォーム仕様: 問題文の最初の改行までを見出し、残りを説明欄にする', () => {
+  const spec = buildFormSpec([q({ question_text: '資料を読め。\n確認する項目：A／B\n二行目' }), q({ question_id: 'Q2' })], settings);
+  assert.equal(spec.items[0].title, '資料を読め。');
+  assert.equal(spec.items[0].help_text, '確認する項目：A／B\n二行目');
+  assert.equal(spec.items[1].title, '日本の首都は？');
+  assert.equal(spec.items[1].help_text, '');
+});
+
 test('フォーム仕様: 既定で1人1回に制限し、先頭に必須の氏名欄を置く', () => {
   const spec = buildFormSpec([q()], settings);
   assert.equal(spec.limitOneResponse, true);

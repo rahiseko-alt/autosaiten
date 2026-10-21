@@ -83,6 +83,7 @@ function populateForm_(form, spec, version) {
     if (it.section_header) form.addSectionHeaderItem().setTitle(it.section_header);
     var item = addItem_(form, it);
     item.setTitle(it.title);
+    if (it.help_text) item.setHelpText(it.help_text);
     item.setRequired(it.required);
     item.setPoints(it.points);
     applyFeedback_(item, it);
