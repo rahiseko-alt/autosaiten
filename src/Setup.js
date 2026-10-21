@@ -23,7 +23,6 @@ function setupSystem() {
   INTERNAL_SHEETS.forEach(function (name) { protectInternal_(ss.getSheetByName(name)); });
 
   setupReceptionSheets_(ss);
-  rememberIds_(PropertiesService.getDocumentProperties().getProperty(PROP_ACTIVE_FORM_ID));
 
   var authoring = setupAuthoringSheet_(ss);
   setupResultsView_(ss);
@@ -35,7 +34,7 @@ function setupSystem() {
   ss.toast('初期セットアップが完了しました。API キーは Script Properties に別途設定してください。', 'AI Grader', 8);
 }
 
-/** 受付ページが使う名簿・資料・割り当てのシート。名簿と資料は先生（と Claude）が入れる。 */
+/** 受付ページ（reception/）が使う名簿・資料・割り当てのシート。名簿と資料は先生（と Claude）が入れる。 */
 function setupReceptionSheets_(ss) {
   [[SHEET_NAMES.ROSTER, ROSTER_HEADERS], [SHEET_NAMES.MATERIALS, MATERIAL_HEADERS], [SHEET_NAMES.ASSIGNMENTS, ASSIGNMENT_HEADERS]]
     .forEach(function (pair) {

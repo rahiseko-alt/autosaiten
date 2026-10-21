@@ -33,7 +33,6 @@ function buildOrVersionForm() {
   });
 
   if (action === 'NOOP') {
-    rememberIds_(form.getId());
     showFormInfo_(form, version);
     return;
   }
@@ -54,7 +53,6 @@ function buildOrVersionForm() {
 
   populateForm_(form, spec, version);
   props.setProperty(PROP_ACTIVE_FORM_ID, form.getId());
-  rememberIds_(form.getId());
   props.setProperty(PROP_FORM_VERSION, String(version));
   props.setProperty(PROP_DEFINITION_HASH, hash);
   if (oldForm) {

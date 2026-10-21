@@ -52,16 +52,18 @@ function buildFormSpec(questions, settings, classes) {
       feedback_incorrect: String(q.feedback_incorrect || '')
     };
   });
-  return {
+  var spec = {
     title: String(settings.FORM_TITLE || ''),
     description: String(settings.FORM_DESCRIPTION || ''),
     collectEmail: settings.COLLECT_EMAIL === true || String(settings.COLLECT_EMAIL).toUpperCase() === 'TRUE',
     // 既定は1人1回。Settings で FALSE にしたときだけ外す
     limitOneResponse: !(settings.LIMIT_ONE_RESPONSE === false || String(settings.LIMIT_ONE_RESPONSE).toUpperCase() === 'FALSE'),
     nameItem: { title: '氏名（Name）', required: true },
-    classItem: (classes && classes.length > 0) ? { title: 'クラス（Class）', required: true, choices: classes.slice() } : null,
     items: items
   };
+  // クラス欄が無いときは項目ごと入れない（定義の指紋を、クラス欄ができる前と同じに保つ）
+  if (classes && classes.length > 0) spec.classItem = { title: 'クラス（Class）', required: true, choices: classes.slice() };
+  return spec;
 }
 
 /** フォームに影響する定義だけから、短い指紋を作る（FNV-1a 32bit + 長さ）。 */

@@ -101,7 +101,8 @@ test('クラスの一覧があれば、氏名欄の次に必須のクラス欄�
   assert.notEqual(definitionHash([q()], settings, ['国際', '総合']), definitionHash([q()], settings));
 });
 
-test('クラスの一覧が無ければクラス欄は付かない', () => {
-  assert.equal(buildFormSpec([q()], settings).classItem, null);
-  assert.equal(buildFormSpec([q()], settings, []).classItem, null);
+test('クラスの一覧が無ければクラス欄は付かず、定義の指紋もクラス欄が無い場合と同じ', () => {
+  assert.equal('classItem' in buildFormSpec([q()], settings), false);
+  assert.equal('classItem' in buildFormSpec([q()], settings, []), false);
+  assert.equal(definitionHash([q()], settings, []), definitionHash([q()], settings));
 });

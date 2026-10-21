@@ -37,7 +37,19 @@
 2. このリポジトリで `npm install -g @google/clasp`、`clasp login`、`cp .clasp.json.example .clasp.json`（スクリプトIDを書く）、`clasp push`
 3. スプレッドシートを開き直し、メニュー「AI Grader > 初期セットアップ」を実行して権限を許可する
 4. LLM 採点を使うなら、次の「LLM 採点の準備」をする
-5. 受付ページ（学生ごとに数字違いの資料を配る）を使うなら、`clasp deploy` で公開し、出てきたデプロイ ID から `https://script.google.com/macros/s/<デプロイID>/exec` を学生に配る。名簿シート（クラス・No.・氏名・呼び名）と資料シート（資料番号・本文・正解）を埋めておく
+5. 受付ページ（学生ごとに数字違いの資料を配る）を使うなら、次の「受付ページの準備」をする
+
+### 受付ページの準備（使う場合だけ）
+
+受付ページは、採点の仕組みとは別の Apps Script プロジェクト（`reception/`）です。誰でも開けるページなので、採点の仕組みの関数を外から呼ばれないよう分けてあります（ADR 0009）。
+
+1. 名簿シート（クラス・No.・氏名・呼び名）と資料シート（資料番号・本文・正解。資料番号は1から欠番なし）を埋め、初期セットアップをやり直す
+2. `reception/LocalSettings.example.js` を `reception/LocalSettings.js` に写し、スプレッドシートの ID を書く（GitHub には置かない）
+3. `reception/` で `clasp create --type standalone --title 受付ページ --rootDir .` を1回だけ実行する（`appsscript.json` が上書きされたら元に戻す）。以後は前回の `reception/.clasp.json` を写して使う
+4. `reception/` で `clasp push`、初回は `clasp deploy`。出てきたデプロイ ID から `https://script.google.com/macros/s/<デプロイID>/exec` を作る
+5. そのURLを先生が一度開き、権限を許可する。その後で学生に配る（学生以外には配らない。名簿の氏名が見えるため）
+6. コードを直したときは `clasp push` のあと `clasp deploy -i <同じデプロイID>` を使う（`-i` なしでは URL が変わり、`push` だけでは公開中のページは古いまま）
+7. URL を配ったあとは、名簿のクラスを変えない（変えて「これでOK」を押すと新しい版のフォームになり、受付ページの入口がそちらに切り替わる）
 
 Apps Script エディタでコードを直接直さないでください（正本は GitHub です。これは運用上の約束で、技術的に強制されてはいません）。
 

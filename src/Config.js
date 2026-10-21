@@ -10,6 +10,11 @@ var SHEET_NAMES = {
   ROSTER: '名簿', MATERIALS: '資料', ASSIGNMENTS: '割り当て'
 };
 
+/** 受付ページ（別の Apps Script プロジェクト、reception/）が読み書きするシートの見出し。 */
+var ROSTER_HEADERS = ['クラス', 'No.', '氏名', '呼び名'];
+var MATERIAL_HEADERS = ['資料番号', '本文', '家賃', '貯金額', '必要額', '不足額', '必要日数', '開始期限'];
+var ASSIGNMENT_HEADERS = ['クラス', '氏名', '資料番号', '受付日時'];
+
 var INTERNAL_SHEETS = [SHEET_NAMES.QUEUE, SHEET_NAMES.FORM_MAPPING, SHEET_NAMES.LOGS];
 
 /** 先生には見せない裏方のシート（ADR 0007）。 */

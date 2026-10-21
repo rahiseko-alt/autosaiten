@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { planAssignment, rosterByClass } = require('../src/Reception.js');
+const { planAssignment, rosterByClass } = require('../reception/Reception.js');
 
 const a = (cls, name, no) => ({ クラス: cls, 氏名: name, 資料番号: no });
 
@@ -16,6 +16,10 @@ test('同じクラス・氏名で開き直したら、同じ番号のまま', ()
 
 test('クラスが違えば、同じ氏名でも別の人', () => {
   assert.deepEqual(planAssignment([a('国際', 'A', 1)], '総合', 'A', 60), { number: 2, isNew: true });
+});
+
+test('割り当ての行が途中で消えても、直前の番号の次を振る（番号が重ならない）', () => {
+  assert.deepEqual(planAssignment([a('国際', 'A', 1), a('国際', 'C', 3)], '国際', 'D', 60), { number: 4, isNew: true });
 });
 
 test('用意した資料の数を超えたら1番に戻る', () => {

@@ -76,7 +76,7 @@ function gradeResponse(input) {
       if (g.status === 'REVIEW_REQUIRED') {
         row.grading_reason = '正答と一致しませんでした。別の言語で正しく答えている可能性があるため、意味で確認してください';
       }
-    } else if (q.grading_mode === 'MANUAL' && Number(q.points) === 0) {
+    } else if (q.grading_mode === 'MANUAL' && !rgIsBlank_(q.points) && Number(q.points) === 0) {
       // 配点0の欄（タグ名など）は点を付けないので、手動採点を待たない
       row.status = 'NO_POINTS';
       row.grading_reason = '加点なしの欄';

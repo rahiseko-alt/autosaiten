@@ -2,17 +2,8 @@
  * シートの読み書き。見出し名をキーにした行オブジェクトとして扱う。
  */
 
-/**
- * このスプレッドシート。受付ページ（ウェブアプリ）には開いている文書が無いので、控えた ID で開く。
- */
-function activeSpreadsheet_() {
-  var ss = SpreadsheetApp.getActive();
-  if (ss) return ss;
-  return SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty(PROP_SPREADSHEET_ID));
-}
-
 function readTable(sheetName) {
-  var sheet = activeSpreadsheet_().getSheetByName(sheetName);
+  var sheet = SpreadsheetApp.getActive().getSheetByName(sheetName);
   if (!sheet || sheet.getLastRow() < 2) return [];
   var values = sheet.getRange(1, 1, sheet.getLastRow(), sheet.getLastColumn()).getValues();
   var headers = values[0];

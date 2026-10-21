@@ -37,7 +37,12 @@
     var runner = google.script.run.withSuccessHandler(function (v) { tries = 0; ok(v); })
       .withFailureHandler(function (e) {
         var text = String(e && e.message || e);
-        if (/名簿にない|資料/.test(text) || tries >= 5) { tries = 0; say(text, true); el('go').disabled = false; return; }
+        if (/名簿にない|資料|準備/.test(text) || tries >= 5) {
+          tries = 0;
+          if (fn === 'claimMaterial') { say(text, true); el('go').disabled = false; }
+          else say('読み込めませんでした。ページを開き直すか、先生に連絡してください / Could not load. Reload the page or ask your teacher.', true);
+          return;
+        }
         tries += 1;
         say('混み合っています。自動でやり直しています… (' + tries + ')', false);
         setTimeout(function () { call(fn, args, ok); }, 1500 + Math.random() * 2500);
@@ -75,7 +80,12 @@
       el('pick').className = 'hidden';
       el('no').textContent = r.number;
       el('material').textContent = r.text;
-      if (r.formUrl) el('formlink').href = r.formUrl; else el('formlink').className = 'hidden';
+      if (r.formUrl) {
+        el('formlink').href = r.formUrl;
+      } else {
+        el('formlink').className = 'hidden';
+        say('回答フォームへの入口を用意できませんでした。先生に連絡してください / The answer form is not ready. Please ask your teacher.', true);
+      }
       el('result').className = '';
     });
   });
