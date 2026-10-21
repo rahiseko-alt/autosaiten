@@ -321,3 +321,20 @@ test('別の言語の短答は要確認になり、Claude が意味で確かめ�
   assert.equal(env.forms.form1.submitted.length, 1);
   assert.deepEqual(env.forms.form1.submitted[0][0].grades.map((g) => g.score).sort(), [5, 5]);
 });
+
+test('新しい版を作る途中で Google が止まっても、旧フォームは受付を続ける', () => {
+  const env = prepare();
+  pressOk(env);
+  env.forms.form1.submit({ '日本の首都は？': '東京' });
+  env.ss.getSheetByName('試験作成').put(11, 2, '日本の首都はどこですか？');
+  const create = env.ctx.FormApp.create;
+  env.ctx.FormApp.create = () => { throw new Error('サービスがタイムアウトしました: フォーム'); };
+  pressOk(env);
+  assert.equal(control(env, 'STATUS'), 'ERROR');
+  assert.equal(env.forms.form1.accepting, true);
+  env.ctx.FormApp.create = create;
+  pressOk(env);
+  assert.equal(control(env, 'STATUS'), 'READY', control(env, 'MESSAGE'));
+  assert.equal(env.forms.form1.accepting, false);
+  assert.equal(control(env, 'FORM_VERSION'), 2);
+});

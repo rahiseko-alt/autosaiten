@@ -37,11 +37,11 @@ function buildOrVersionForm() {
   }
   var spec = buildFormSpec(questions, settings);
 
+  var oldForm = null;
   if (action === 'CREATE' || action === 'NEW_VERSION') {
-    if (action === 'NEW_VERSION' && fbIsTrue_(settings.AUTO_CLOSE_OLD_FORM)) {
-      form.setAcceptingResponses(false);
-      writeLog('INFO', 'FORM_CLOSED', form.getId(), '旧フォームの回答受付を停止しました', { form_version: version });
-    }
+    // 旧フォームは、新しいフォームが出来上がってから閉じる。途中で Google が止まっても、
+    // 旧フォームが閉じたまま新しいフォームが無い、という状態にしないため。
+    if (action === 'NEW_VERSION' && fbIsTrue_(settings.AUTO_CLOSE_OLD_FORM)) oldForm = form;
     version += 1;
     form = FormApp.create(spec.title + (version > 1 ? ' (第' + version + '版)' : ''));
     form.setDestination(FormApp.DestinationType.SPREADSHEET, SpreadsheetApp.getActive().getId());
@@ -54,6 +54,10 @@ function buildOrVersionForm() {
   props.setProperty(PROP_ACTIVE_FORM_ID, form.getId());
   props.setProperty(PROP_FORM_VERSION, String(version));
   props.setProperty(PROP_DEFINITION_HASH, hash);
+  if (oldForm) {
+    oldForm.setAcceptingResponses(false);
+    writeLog('INFO', 'FORM_CLOSED', oldForm.getId(), '旧フォームの回答受付を停止しました', { form_version: version - 1 });
+  }
   showFormInfo_(form, version);
 }
 
