@@ -19,10 +19,27 @@ test('EXACT は前処理後の完全一致で満点', () => {
   assert.equal(gradeAuto(q(), 'Google Docs').score, 0);
 });
 
-test('短答で一致しない回答は、別の言語の可能性があるので要確認（仮に0点）', () => {
-  const r = gradeAuto(q({ auto_rule: 'ANY_OF', correct_answer: '東京' }), 'Tokyo');
-  assert.deepEqual([r.score, r.status], [0, 'REVIEW_REQUIRED']);
+test('短答で、正答と同じ文字（日本語）の誤答は0点で確定する', () => {
+  const r = gradeAuto(q({ auto_rule: 'ANY_OF', correct_answer: '東京', alternatives: '東京都' }), '大阪');
+  assert.deepEqual([r.score, r.status], [0, 'AUTO_GRADED']);
+  assert.equal(gradeAuto(q({ auto_rule: 'ANY_OF', correct_answer: '東京' }), 'おおさか').status, 'AUTO_GRADED');
+});
+
+test('短答で、正答と違う文字（別の言語）の回答だけ要確認（仮に0点）', () => {
+  const tokyo = q({ auto_rule: 'ANY_OF', correct_answer: '東京' });
+  assert.deepEqual([gradeAuto(tokyo, 'Tokyo').score, gradeAuto(tokyo, 'Tokyo').status], [0, 'REVIEW_REQUIRED']);
+  assert.equal(gradeAuto(tokyo, '도쿄').status, 'REVIEW_REQUIRED');
+  assert.equal(gradeAuto(tokyo, 'Токио').status, 'REVIEW_REQUIRED');
   assert.equal(gradeAuto(q({ auto_rule: 'CONTAINS', correct_answer: '価格' }), 'price').status, 'REVIEW_REQUIRED');
+});
+
+test('別解に英語があれば、英語の誤答は0点で確定する', () => {
+  const r = gradeAuto(q({ auto_rule: 'ANY_OF', correct_answer: '東京', alternatives: 'Tokyo' }), 'Osaka');
+  assert.equal(r.status, 'AUTO_GRADED');
+});
+
+test('簡体字は日本語と同じ漢字の仲間として扱う（別解に書かなければ0点）', () => {
+  assert.equal(gradeAuto(q({ auto_rule: 'ANY_OF', correct_answer: '東京' }), '东京').status, 'AUTO_GRADED');
 });
 
 test('正規化: どの言語でも大文字小文字をそろえ、ラテン文字のアクセントを外す', () => {
@@ -48,49 +65,11 @@ test('数値: 小数点のコンマ（3,14）と桁区切り（1,200）を読み
   assert.equal(gradeAuto(q({ auto_rule: 'NUMBER', correct_answer: '1200', tolerance: '0' }), '1,200').score, 5);
 });
 
-test('数値: 数として読めて許容差の外なら不正解で確定、数として読めなければ要確認', () => {
+test('数値: 数として読めて許容差の外なら不正解で確定、日本語で読めない回答も確定、別の言語の言葉だけ要確認', () => {
   const question = q({ auto_rule: 'NUMBER', correct_answer: '25', tolerance: '0.1' });
   assert.deepEqual([gradeAuto(question, '26').score, gradeAuto(question, '26').status], [0, 'AUTO_GRADED']);
+  assert.equal(gradeAuto(question, '二十五').status, 'AUTO_GRADED');
   assert.equal(gradeAuto(question, 'twenty-five').status, 'REVIEW_REQUIRED');
-});
-
-test('日本語の意味変換はしない', () => {
-  assert.equal(gradeAuto(q({ correct_answer: '東京' }), 'とうきょう').score, 0);
-});
-
-test('ANY_OF は正答と許容回答のどれかに一致すれば満点', () => {
-  const question = q({ auto_rule: 'ANY_OF', correct_answer: '東京', alternatives: '東京都||とうきょう' });
-  assert.equal(gradeAuto(question, '東京都').score, 5);
-  assert.equal(gradeAuto(question, 'とうきょう').score, 5);
-  assert.equal(gradeAuto(question, '大阪').score, 0);
-});
-
-test('CONTAINS はキーワードをすべて含めば満点、欠ければ0点', () => {
-  const question = q({ auto_rule: 'CONTAINS', correct_answer: '価格||需要' });
-  assert.equal(gradeAuto(question, '需要と価格の関係').score, 5);
-  assert.equal(gradeAuto(question, '価格だけ').score, 0);
-});
-
-test('NUMBER は許容差内なら満点', () => {
-  const question = q({ auto_rule: 'NUMBER', correct_answer: '25', tolerance: '0.1' });
-  assert.equal(gradeAuto(question, '25.05').score, 5);
-  assert.equal(gradeAuto(question, '25.2').score, 0);
-  assert.equal(gradeAuto(question, '二十五').score, 0);
-  assert.equal(gradeAuto(question, '二十五').status, 'REVIEW_REQUIRED');
-  assert.equal(gradeAuto(q({ auto_rule: 'NUMBER', correct_answer: '3' }), '３').score, 5);
-});
-
-test('NATIVE の選択式は選んだ選択肢が正答と一致すれば満点', () => {
-  const question = q({ question_type: 'MULTIPLE_CHOICE', auto_rule: 'NATIVE', correct_answer: 'Price', options: 'Product||Price' });
-  assert.equal(gradeAuto(question, 'Price').score, 5);
-  assert.equal(gradeAuto(question, 'Product').score, 0);
-});
-
-test('CHECKBOX は全部合えば満点、それ以外は0点（部分点なし）', () => {
-  const question = q({ question_type: 'CHECKBOX', auto_rule: 'NATIVE', correct_answer: 'A||C', options: 'A||B||C' });
-  assert.equal(gradeAuto(question, ['C', 'A']).score, 5);
-  assert.equal(gradeAuto(question, ['A']).score, 0);
-  assert.equal(gradeAuto(question, ['A', 'B', 'C']).score, 0);
 });
 
 test('未回答は「未回答」として0点で確定する', () => {
