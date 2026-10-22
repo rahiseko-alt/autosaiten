@@ -26,7 +26,6 @@ function practiceFormSpec(classes) {
     classItem: { title: 'クラス', required: true, choices: choices },
     items: [
       { kind: 'INFO', title: 'Bさんが法律違反にならないように正しい答えを作ってください。ただしBさんの計画だけでは正確に答えられないならば、その旨も正直に伝えてください。' },
-      { kind: 'INFO', title: 'ただし、AIだけでは判断できない情報がある場合は、その箇所にタグを付けさせなさい。' },
       { kind: 'TEXT', title: '判断できない箇所に貼るタグの名前を決めてください。', required: true },
       { kind: 'PARAGRAPH', title: 'Bさんの正しい答えを貼り付けてください。', required: true },
     ],

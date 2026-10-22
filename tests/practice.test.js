@@ -3,21 +3,20 @@ const assert = require('node:assert/strict');
 const { practiceFormSpec, practiceMaterial, planFormSetup, planAnswerSheet, rosterByClass } = require('../practice/Practice.js');
 const reception = require('../reception/Reception.js');
 
-test('練習フォームは、氏名欄・クラス欄・説明・ただし書き・タグ名・結果欄の順に並ぶ', () => {
+test('練習フォームは、氏名欄・クラス欄・問題文・タグ名・結果欄の順に並ぶ', () => {
   const spec = practiceFormSpec(['国際', '総合']);
   assert.equal(spec.nameItem.required, true);
   assert.deepEqual(spec.classItem.choices, ['国際', '総合']);
   assert.equal(spec.classItem.required, true);
-  assert.deepEqual(spec.items.map(i => i.kind), ['INFO', 'INFO', 'TEXT', 'PARAGRAPH']);
+  assert.deepEqual(spec.items.map(i => i.kind), ['INFO', 'TEXT', 'PARAGRAPH']);
+  assert.equal(spec.items[1].required, true);
   assert.equal(spec.items[2].required, true);
-  assert.equal(spec.items[3].required, true);
 });
 
 test('練習フォームの問題文は、法律違反にならない正しい答えを求め、判断できないときは正直に伝えさせる', () => {
   const titles = practiceFormSpec(['国際']).items.map(i => i.title);
   assert.deepEqual(titles, [
     'Bさんが法律違反にならないように正しい答えを作ってください。ただしBさんの計画だけでは正確に答えられないならば、その旨も正直に伝えてください。',
-    'ただし、AIだけでは判断できない情報がある場合は、その箇所にタグを付けさせなさい。',
     '判断できない箇所に貼るタグの名前を決めてください。',
     'Bさんの正しい答えを貼り付けてください。',
   ]);
