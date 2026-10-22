@@ -190,6 +190,20 @@ test('「これでOK」を押し直すと、手で消えたクラスの選択肢
   assert.equal(control(env, 'FORM_VERSION'), 1);
 });
 
+test('システム診断は、フォームに届いているのに待ち行列に登録されていない回答を知らせる', () => {
+  const env = prepare();
+  pressOk(env);
+  env.forms.form1.submit({ '日本の首都は？': '東京' });
+  env.ctx.runDiagnostics();
+  const before = env.ss.getSheetByName('Control').getRange('B5').getValue();
+  assert.ok(before.includes('NG: フォームの回答の登録'), before);
+  assert.ok(before.includes('未登録 1件'), before);
+  env.ctx.processGradingQueue();
+  env.ctx.runDiagnostics();
+  const after = env.ss.getSheetByName('Control').getRange('B5').getValue();
+  assert.ok(after.includes('OK: フォームの回答の登録'), after);
+});
+
 test('掲載を外した問題はフォームに載らない', () => {
   const env = prepare();
   env.ss.getSheetByName('試験作成').put(12, 1, false);
