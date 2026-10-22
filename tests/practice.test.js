@@ -13,13 +13,13 @@ test('練習フォームは、氏名欄・クラス欄・説明・ただし書�
   assert.equal(spec.items[3].required, true);
 });
 
-test('練習フォームの文面は、本番の試験作成シートと同じ', () => {
+test('練習フォームの問題文は、法律違反にならない正しい答えを求め、判断できないときは正直に伝えさせる', () => {
   const titles = practiceFormSpec(['国際']).items.map(i => i.title);
   assert.deepEqual(titles, [
-    '受付ページに表示された資料をファクトチェックしてください。',
+    'Bさんが法律違反にならないように正しい答えを作ってください。ただしBさんの計画だけでは正確に答えられないならば、その旨も正直に伝えてください。',
     'ただし、AIだけでは判断できない情報がある場合は、その箇所にタグを付けさせなさい。',
     '判断できない箇所に貼るタグの名前を決めてください。',
-    'ファクトチェックの結果を貼り付けてください。',
+    'Bさんの正しい答えを貼り付けてください。',
   ]);
 });
 
@@ -36,12 +36,19 @@ test('名簿にクラスがなければ、フォームを作らず先生に知�
   assert.throws(() => practiceFormSpec([]), /名簿/);
 });
 
-test('練習の資料は、条件文とAIの説明を含み、いつも同じ本文を返す', () => {
+test('練習の資料は、Bさんの計画とAIの回答を含み、いつも同じ本文を返す', () => {
   const text = practiceMaterial();
   assert.equal(typeof text, 'string');
-  assert.ok(text.includes('【条件文】'));
-  assert.ok(text.includes('【AIの説明】'));
+  assert.ok(text.startsWith('以下はBさんの今後の計画です。'));
+  assert.ok(text.includes('【AIの回答】'));
   assert.equal(practiceMaterial(), text);
+});
+
+test('練習の資料に、ファクトチェックをするという手がかりを入れない', () => {
+  const text = practiceMaterial();
+  assert.equal(text.includes('ファクトチェック'), false);
+  assert.equal(text.includes('誤りを含む'), false);
+  assert.equal(text.includes('前提ではなく'), false);
 });
 
 test('保存済みのフォームがあれば、新しく作らず中身だけ作り直す（外から何度呼ばれてもフォームは増えない）', () => {
