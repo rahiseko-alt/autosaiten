@@ -8,7 +8,7 @@
 1. `practice/LocalSettings.example.js` を `practice/LocalSettings.js` に写し、本番のスプレッドシートの ID を書く（GitHub には置かない）
 2. `practice/` で `clasp create --type standalone --title 練習の受付ページ --rootDir .` を1回だけ実行する（`appsscript.json` が上書きされたら元に戻す）
 3. **`practice/.clasp.json` があることを確かめてから** `practice/` で `clasp push` する（無いまま打つと、上のフォルダの設定を拾って別のプロジェクトを上書きする）
-4. Apps Script エディタで `setupPracticeForm` を1回実行し、権限を許可する。練習フォームが作られる（2回目以降は何も作らず、同じフォームの回答用URLを返すだけ）
+4. Apps Script エディタで `setupPracticeForm` を1回実行し、権限を許可する。練習フォームが作られる（2回目以降は新しく作らず、同じフォームの中身を今の内容に作り直し、回答用URLを返す。練習の問題を変えたときも、`clasp push` のあとにこれをもう一度実行する）
 5. `clasp deploy` で公開する。出てきたデプロイ ID から `https://script.google.com/macros/s/<デプロイID>/exec` を作り、引き継ぎメモに残す
 6. そのURLを先生が一度開き、権限を許可してから、学生に配る。**配るのはこのURLだけ**（フォームのURLは配らない）
 7. コードを直したときは `clasp push` のあと `clasp deploy -i <同じデプロイID>` を使う
@@ -24,11 +24,11 @@
 
 ## 後片づけ
 
-練習が終わったら、フォームの「回答」画面で回答を削除するか、デプロイを外す。練習フォームを作り直したいときは、Apps Script の「プロジェクトの設定 > スクリプト プロパティ」の `practiceFormId`・`practiceNameItemId`・`practiceClassItemId` を消してから `setupPracticeForm` をもう一度実行する。
+練習が終わったら、フォームの「回答」画面で回答を削除するか、デプロイを外す。練習の問題や名簿のクラスを変えたときは、`clasp push` のあとに `setupPracticeForm` をもう一度実行する（同じフォームの中身が作り直される）。別のフォームに作り替えたいときだけ、Apps Script の「プロジェクトの設定 > スクリプト プロパティ」の `practiceFormId`・`practiceNameItemId`・`practiceClassItemId` を消してから実行する。
 
 ## 注意
 
 - `setupPracticeForm` は、練習フォームを作る前に公開しないでください。外から呼ばれると、先生のドライブにフォームが作られます。必ず先に実行してから公開する。
 - フォームを消す前に、デプロイを外す（消えたフォームへの入口が、最大6時間は残るため）。
 - 作成に失敗したときは、ドライブに「練習フォーム」ができていないか見て、あれば消してから再実行する。
-- 名簿にクラスを足したときは、練習フォームを作り直す（上の「後片づけ」の手順）。足したクラスの学生にはフォームへのボタンが出ない。
+- 名簿にクラスを足したときは、`setupPracticeForm` をもう一度実行する。しないと、足したクラスの学生にはフォームへのボタンが出ない。

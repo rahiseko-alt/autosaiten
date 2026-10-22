@@ -31,8 +31,10 @@ function claimPractice(cls, name) {
 }
 
 /**
- * 練習フォームを作る。教師がエディタから1回実行する。
- * 外から呼ばれても困らないよう、保存済みのフォームがあれば作らず、回答用のURLだけを返す（編集用のURLは返さない）。
+ * 練習フォームを作る（既にあれば、中身を今の内容に作り直す）。教師がエディタから実行する。
+ * 外から呼ばれても困らないよう、保存済みのフォームがあれば新しくは作らず、同じフォームの項目を作り直すだけにする。
+ * 何度呼ばれてもフォームは増えない。返すのは回答用のURLだけで、編集用のURLは返さない。
+ * 作り直すと項目の番号が変わるので、保存した番号も更新する（事前入力の入口は新しい番号で作り直される）。
  */
 function setupPracticeForm() {
   var lock = LockService.getScriptLock();
@@ -40,9 +42,10 @@ function setupPracticeForm() {
   try {
     var props = PropertiesService.getScriptProperties();
     var plan = planFormSetup({ formId: props.getProperty(PR_PROP_FORM_) });
-    if (plan.action === 'reuse') {
+    var existing = null;
+    if (plan.action === 'update') {
       try {
-        return FormApp.openById(plan.formId).getPublishedUrl();
+        existing = FormApp.openById(plan.formId);
       } catch (e) {
         throw new Error('保存した練習フォームが見つかりません（削除された可能性があります）。スクリプトプロパティの practiceFormId・practiceNameItemId・practiceClassItemId を消してから、もう一度実行してください');
       }
@@ -51,7 +54,7 @@ function setupPracticeForm() {
     var spec = practiceFormSpec(getPracticeRoster().map(function (g) { return g.name; }));
     var built;
     try {
-      built = prBuildForm_(spec);
+      built = prBuildForm_(spec, existing);
     } catch (e) {
       throw new Error('練習フォームの作成に失敗しました。Googleドライブに「' + spec.title + '」ができていたら消してから、もう一度実行してください（' + e.message + '）');
     }
@@ -62,9 +65,11 @@ function setupPracticeForm() {
   }
 }
 
-/** フォームを作って項目を足す。作ったフォームと、保存する値（フォームIDと氏名欄・クラス欄の項目番号）を返す。 */
-function prBuildForm_(spec) {
-  var form = FormApp.create(spec.title);
+/** フォームを作って（既存なら項目を全部消して）項目を足す。フォームと、保存する値（フォームIDと氏名欄・クラス欄の項目番号）を返す。 */
+function prBuildForm_(spec, existing) {
+  var form = existing || FormApp.create(spec.title);
+  form.getItems().forEach(function (it) { form.deleteItem(it); });
+  form.setTitle(spec.title);
   form.setDescription(spec.description);
   form.setIsQuiz(spec.isQuiz);
   form.setCollectEmail(spec.collectEmail);
