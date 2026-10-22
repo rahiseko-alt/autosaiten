@@ -51,8 +51,8 @@ function updateJob_(rowIndex, patch) {
   });
 }
 
-/** すべての版のフォームから、新しい回答を待ち行列に登録する。すでにあるものは登録しない。 */
-function ingestNewResponses_() {
+/** 採点の対象にするフォーム（今のフォームと、対応表にある過去の版）。{フォームID: 版}。 */
+function trackedForms_() {
   var props = PropertiesService.getDocumentProperties();
   var forms = {};
   var activeId = props.getProperty(PROP_ACTIVE_FORM_ID);
@@ -60,6 +60,12 @@ function ingestNewResponses_() {
   readTable(SHEET_NAMES.FORM_MAPPING).forEach(function (m) {
     if (m.form_id && forms[m.form_id] === undefined) forms[m.form_id] = Number(m.form_version);
   });
+  return forms;
+}
+
+/** すべての版のフォームから、新しい回答を待ち行列に登録する。すでにあるものは登録しない。 */
+function ingestNewResponses_() {
+  var forms = trackedForms_();
 
   Object.keys(forms).forEach(function (formId) {
     var form;

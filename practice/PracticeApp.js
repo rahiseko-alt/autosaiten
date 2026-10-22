@@ -3,7 +3,7 @@
  *
  * 本番の受付（reception/）や採点の仕組み（src/）とは別の Apps Script プロジェクト。誰でも開けるウェブアプリでは
  * 末尾が _ でない関数はすべて画面から呼べるため、本番の関数はここに置かない（ADR 0009）。
- * スプレッドシートは名簿を読むだけ（権限も読み取りのみ）。割り当て・結果・キューには何も書かない。
+ * スプレッドシートは名簿を読むだけ（コードは読み取りの呼び出ししか使わない。SpreadsheetApp.openById は読み取り専用の権限では動かないため、権限の範囲は本番の受付と同じ）。割り当て・結果・キューには何も書かない。
  * 練習フォームは setupPracticeForm を教師が1回実行して作る。作ったフォームの番号はスクリプトプロパティに保存する。
  */
 
@@ -11,6 +11,7 @@ var PR_CACHE_SECONDS_ = 21600;
 var PR_PROP_FORM_ = 'practiceFormId';
 var PR_PROP_NAME_ITEM_ = 'practiceNameItemId';
 var PR_PROP_CLASS_ITEM_ = 'practiceClassItemId';
+var PR_PROP_SHEET_ = 'practiceAnswerSheetId';
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('PracticePage')
@@ -31,8 +32,10 @@ function claimPractice(cls, name) {
 }
 
 /**
- * 練習フォームを作る。教師がエディタから1回実行する。
- * 外から呼ばれても困らないよう、保存済みのフォームがあれば作らず、回答用のURLだけを返す（編集用のURLは返さない）。
+ * 練習フォームを作る（既にあれば、中身を今の内容に作り直す）。教師がエディタから実行する。
+ * 外から呼ばれても困らないよう、保存済みのフォームがあれば新しくは作らず、同じフォームの項目を作り直すだけにする。
+ * 何度呼ばれてもフォームは増えない。返すのは回答用のURLだけで、編集用のURLは返さない。
+ * 作り直すと項目の番号が変わるので、保存した番号も更新する（事前入力の入口は新しい番号で作り直される）。
  */
 function setupPracticeForm() {
   var lock = LockService.getScriptLock();
@@ -40,9 +43,10 @@ function setupPracticeForm() {
   try {
     var props = PropertiesService.getScriptProperties();
     var plan = planFormSetup({ formId: props.getProperty(PR_PROP_FORM_) });
-    if (plan.action === 'reuse') {
+    var existing = null;
+    if (plan.action === 'update') {
       try {
-        return FormApp.openById(plan.formId).getPublishedUrl();
+        existing = FormApp.openById(plan.formId);
       } catch (e) {
         throw new Error('保存した練習フォームが見つかりません（削除された可能性があります）。スクリプトプロパティの practiceFormId・practiceNameItemId・practiceClassItemId を消してから、もう一度実行してください');
       }
@@ -51,20 +55,44 @@ function setupPracticeForm() {
     var spec = practiceFormSpec(getPracticeRoster().map(function (g) { return g.name; }));
     var built;
     try {
-      built = prBuildForm_(spec);
+      built = prBuildForm_(spec, existing);
     } catch (e) {
       throw new Error('練習フォームの作成に失敗しました。Googleドライブに「' + spec.title + '」ができていたら消してから、もう一度実行してください（' + e.message + '）');
     }
     props.setProperties(built.saved);
+    prEnsureAnswerSheet_(built.form, props);
     return built.form.getPublishedUrl();
   } finally {
     lock.releaseLock();
   }
 }
 
-/** フォームを作って項目を足す。作ったフォームと、保存する値（フォームIDと氏名欄・クラス欄の項目番号）を返す。 */
-function prBuildForm_(spec) {
-  var form = FormApp.create(spec.title);
+/**
+ * 練習の回答を集めるシートを、フォームにつなぐ。本番と同じように採点できるようにするため。
+ * 本番のスプレッドシートとは別の新しいシート（「練習の回答」）を作り、番号を保存する。保存済みなら新しくは作らない。
+ */
+function prEnsureAnswerSheet_(form, props) {
+  var plan = planAnswerSheet({ sheetId: props.getProperty(PR_PROP_SHEET_) });
+  var ss;
+  if (plan.action === 'reuse') {
+    try {
+      ss = SpreadsheetApp.openById(plan.sheetId);
+    } catch (e) {
+      throw new Error('保存した「練習の回答」シートが見つかりません。スクリプトプロパティの practiceAnswerSheetId を消してから、もう一度実行してください');
+    }
+  } else {
+    ss = SpreadsheetApp.create('練習の回答');
+    props.setProperty(PR_PROP_SHEET_, ss.getId());
+  }
+  form.setDestination(FormApp.DestinationType.SPREADSHEET, ss.getId());
+  Logger.log('練習の回答シート: ' + ss.getUrl());
+}
+
+/** フォームを作って（既存なら項目を全部消して）項目を足す。フォームと、保存する値（フォームIDと氏名欄・クラス欄の項目番号）を返す。 */
+function prBuildForm_(spec, existing) {
+  var form = existing || FormApp.create(spec.title);
+  form.getItems().forEach(function (it) { form.deleteItem(it); });
+  form.setTitle(spec.title);
   form.setDescription(spec.description);
   form.setIsQuiz(spec.isQuiz);
   form.setCollectEmail(spec.collectEmail);
@@ -100,7 +128,7 @@ function prSpreadsheet_() {
   try {
     prOpened_ = SpreadsheetApp.openById(SPREADSHEET_ID);
   } catch (e) {
-    throw new Error(notReady);
+    throw new Error(notReady + ' [' + e.message + ']');
   }
   return prOpened_;
 }

@@ -60,6 +60,24 @@ function runDiagnostics() {
     checks.push({ name: 'トリガー ' + fn, ok: n === 1, detail: n + '本' });
   });
 
+  var queued = {};
+  readQueueRows_().forEach(function (j) { queued[j.job.response_id] = true; });
+  var forms = trackedForms_();
+  var notes = [];
+  var allRegistered = true;
+  Object.keys(forms).forEach(function (id) {
+    try {
+      var ids = FormApp.openById(id).getResponses().map(function (r) { return r.getId(); });
+      var missing = ids.filter(function (rid) { return !queued[rid]; }).length;
+      if (missing > 0) allRegistered = false;
+      notes.push('第' + forms[id] + '版: 回答' + ids.length + '件・未登録 ' + missing + '件');
+    } catch (e) {
+      allRegistered = false;
+      notes.push('第' + forms[id] + '版: フォームを開けません');
+    }
+  });
+  checks.push({ name: 'フォームの回答の登録', ok: allRegistered, detail: notes.join(' / ') });
+
   var counts = {};
   readQueueRows_().forEach(function (j) { counts[j.job.status] = (counts[j.job.status] || 0) + 1; });
   checks.push({ name: 'Queueの状態', ok: !counts.FAILED, detail: JSON.stringify(counts) });

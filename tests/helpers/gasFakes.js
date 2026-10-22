@@ -103,7 +103,9 @@ class FakeItem {
   setRequired() { return this; }
   setPoints(p) { if (!(p > 0)) throw new Error('フォームを更新するデータが無効です。'); this.points = p; return this; }
   setChoices(c) { this.choices = c; return this; }
-  createChoice(value, correct) { return { value, correct }; }
+  createChoice(value, correct) { return { value, correct, getValue() { return value; } }; }
+  getChoices() { return this.choices.slice(); }
+  asMultipleChoiceItem() { return this; }
   setFeedbackForCorrect() { return this; }
   setFeedbackForIncorrect() { return this; }
 }
