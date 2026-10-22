@@ -4,6 +4,25 @@ handover.md の保存上限（5 件）を超えて押し出された古いメモ
 会話開始時には読み込まれない。過去の経緯を掘り返すときだけ開く。新しいものを一番上に来るよう足す。
 
 ---
+## 2026-10-21 受付ページ方式を取り込んだ（PR #28）
+
+**決めたこと**
+
+- PR #28 を最終確認 GO で取り込んだ。受付ページは別の Apps Script プロジェクト `reception/`（ADR 0009）。スプレッドシートの ID は `reception/LocalSettings.js`（GitHub に置かない）で渡す
+- 計画書 #29 と小分け #31〜#34 は完了。他社の確認は #30・#35 に後回し
+
+**次にやること**
+
+- 済：clasp push と受付ページの作成・公開。受付ページのプロジェクト https://script.google.com/d/1mQfzwok1mb8II77INOfjjGMRPczKhLh4mofoKLM-EaVolhzxm0p4Y0bo/edit 、デプロイ ID `AKfycbwnhTcsklCA8HVk7cRbuke00CGPUgV4fZLS6ALl8nY0cq_kEFLGvxQnhd4X5B2FmkYyGA`（更新は `clasp deploy -i` にこの ID）。学生に配るURL: https://script.google.com/macros/s/AKfycbwnhTcsklCA8HVk7cRbuke00CGPUgV4fZLS6ALl8nY0cq_kEFLGvxQnhd4X5B2FmkYyGA/exec
+- 先生が受付ページの URL を一度開いて権限を許可し、「これでOK」を押して新しい版のフォーム（クラス欄・説明欄・タグ名の欄つき）を作る
+- 受付ページで1人分を試し、資料・入口のリンク・割り当てシートの記録を確かめてから学生に配る
+
+**未解決の問題**
+
+- 名簿の書き写し（国際29・総合28・灰色だった総合14）は利用者の確認待ち
+- 実際の Google 上での動作は未確認。60人同時の挙動も未確認
+- 見直し待ちの #3 #4 #15、「フォームの回答 N」シートが見えたまま
+
 ## 2026-10-21 受付ページ方式の実装と途中確認（GO）
 
 **決めたこと**
