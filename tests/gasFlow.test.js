@@ -170,6 +170,26 @@ test('回答が無いフォームは、同じフォームのまま同期され�
   assert.equal(env.ss.getSheetByName('FormMapping').getLastRow(), 4);
 });
 
+function putRoster(env, rows) {
+  const sheet = env.ss.getSheetByName('名簿');
+  rows.forEach((row, i) => row.forEach((v, c) => sheet.put(2 + i, c + 1, v)));
+}
+
+test('「これでOK」を押し直すと、手で消えたクラスの選択肢が名簿から戻る（回答済みでも新しい版は作らない）', () => {
+  const env = prepare();
+  putRoster(env, [['国際', 1, 'A', ''], ['総合', 1, 'B', '']]);
+  pressOk(env);
+  const form = env.forms.form1;
+  const classItem = form.items.filter((i) => i.title.indexOf('クラス') === 0)[0];
+  assert.equal(classItem.getChoices().map((c) => c.getValue()).join(','), '国際,総合');
+  form.submit({ '日本の首都は？': '東京' });
+  classItem.setChoices([classItem.createChoice('総合')]); // 誰かが手で「国際」を消した
+  pressOk(env);
+  assert.equal(classItem.getChoices().map((c) => c.getValue()).join(','), '国際,総合');
+  assert.equal(Object.keys(env.forms).length, 1);
+  assert.equal(control(env, 'FORM_VERSION'), 1);
+});
+
 test('掲載を外した問題はフォームに載らない', () => {
   const env = prepare();
   env.ss.getSheetByName('試験作成').put(12, 1, false);

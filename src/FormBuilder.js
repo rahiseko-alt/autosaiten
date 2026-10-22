@@ -33,6 +33,7 @@ function buildOrVersionForm() {
   });
 
   if (action === 'NOOP') {
+    syncClassChoices_(form, version, classes);
     showFormInfo_(form, version);
     return;
   }
@@ -60,6 +61,25 @@ function buildOrVersionForm() {
     writeLog('INFO', 'FORM_CLOSED', oldForm.getId(), '旧フォームの回答受付を停止しました', { form_version: version - 1 });
   }
   showFormInfo_(form, version);
+}
+
+/**
+ * クラス欄の選択肢を名簿に合わせる。フォームを手で触って選択肢が欠けたときに、「これでOK」を押し直すだけで戻せるようにする。
+ * 選択肢の名前だけを直し、回答は消えず、新しい版も作らない（ADR 0002）。名簿にクラスが無いとき、クラス欄が無いときは何もしない。
+ */
+function syncClassChoices_(form, version, classes) {
+  if (classes.length === 0) return;
+  var mapped = readTable(SHEET_NAMES.FORM_MAPPING).filter(function (r) {
+    return Number(r.form_version) === version && r.question_id === CLASS_QUESTION_ID;
+  })[0];
+  if (!mapped) return;
+  var item = form.getItemById(Number(mapped.form_item_id));
+  if (!item) return;
+  var choiceItem = item.asMultipleChoiceItem();
+  var current = choiceItem.getChoices().map(function (c) { return c.getValue(); });
+  if (current.join('\n') === classes.join('\n')) return;
+  choiceItem.setChoices(classes.map(function (c) { return choiceItem.createChoice(c); }));
+  writeLog('INFO', 'FORM_CLASS_CHOICES_SYNCED', form.getId(), 'クラス欄の選択肢を名簿に合わせました', { before: current, after: classes });
 }
 
 /** 名簿シートのクラスを、出てきた順に重複なく返す。名簿が無ければ空。 */
