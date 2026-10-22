@@ -1,5 +1,5 @@
 /**
- * 練習の判断（フォームの項目の並び、資料の本文、フォームを作るかの判断、名簿の整理）。
+ * 練習の判断（フォームの項目の並び、資料の本文、フォームと回答シートを作るかの判断、名簿の整理）。
  * Apps Script の API には依存しない。本番の受付（reception/）とは別のプロジェクトなので、名簿の整理だけ同じ振る舞いで写してある。
  */
 
@@ -9,7 +9,7 @@ function prText_(v) {
 
 /**
  * 練習フォームの項目の並び。本番に揃え、氏名欄とクラス欄を先頭に置く。
- * テスト形式にせず、配点も付けない。1人1回制限・メール収集もしないので、ログインなしで何度でも送れる。
+ * テスト形式にせず、配点も付けない（採点は本番と同じく、回答シートを見て Claude が会話で行う）。1人1回制限・メール収集もしないので、ログインなしで何度でも送れる。
  * @param {string[]} classes 名簿から取ったクラス（出てきた順）
  */
 function practiceFormSpec(classes) {
@@ -123,6 +123,17 @@ function planFormSetup(saved) {
   return { action: 'create' };
 }
 
+/**
+ * 練習の回答を入れるシート（本番のスプレッドシートとは別の、練習だけのもの）を、新しく作るか保存済みを使うか。
+ * 本番と同じように採点できるよう、回答をシートに集める。何度呼ばれてもシートは増えない。
+ * @param {{sheetId?: string}} saved スクリプトプロパティに保存した値
+ */
+function planAnswerSheet(saved) {
+  var sheetId = saved && prText_(saved.sheetId);
+  if (sheetId) return { action: 'reuse', sheetId: sheetId };
+  return { action: 'create' };
+}
+
 /** 名簿の行を、クラスごとに名簿の順のまま分ける。クラスか氏名が空の行は使わない。reception/Reception.js と同じ振る舞い。 */
 function rosterByClass(rows) {
   var classes = [];
@@ -144,5 +155,6 @@ if (typeof module !== 'undefined') module.exports = {
   practiceFormSpec: practiceFormSpec,
   practiceMaterial: practiceMaterial,
   planFormSetup: planFormSetup,
+  planAnswerSheet: planAnswerSheet,
   rosterByClass: rosterByClass,
 };

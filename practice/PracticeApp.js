@@ -11,6 +11,7 @@ var PR_CACHE_SECONDS_ = 21600;
 var PR_PROP_FORM_ = 'practiceFormId';
 var PR_PROP_NAME_ITEM_ = 'practiceNameItemId';
 var PR_PROP_CLASS_ITEM_ = 'practiceClassItemId';
+var PR_PROP_SHEET_ = 'practiceAnswerSheetId';
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('PracticePage')
@@ -59,10 +60,32 @@ function setupPracticeForm() {
       throw new Error('練習フォームの作成に失敗しました。Googleドライブに「' + spec.title + '」ができていたら消してから、もう一度実行してください（' + e.message + '）');
     }
     props.setProperties(built.saved);
+    prEnsureAnswerSheet_(built.form, props);
     return built.form.getPublishedUrl();
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * 練習の回答を集めるシートを、フォームにつなぐ。本番と同じように採点できるようにするため。
+ * 本番のスプレッドシートとは別の新しいシート（「練習の回答」）を作り、番号を保存する。保存済みなら新しくは作らない。
+ */
+function prEnsureAnswerSheet_(form, props) {
+  var plan = planAnswerSheet({ sheetId: props.getProperty(PR_PROP_SHEET_) });
+  var ss;
+  if (plan.action === 'reuse') {
+    try {
+      ss = SpreadsheetApp.openById(plan.sheetId);
+    } catch (e) {
+      throw new Error('保存した「練習の回答」シートが見つかりません。スクリプトプロパティの practiceAnswerSheetId を消してから、もう一度実行してください');
+    }
+  } else {
+    ss = SpreadsheetApp.create('練習の回答');
+    props.setProperty(PR_PROP_SHEET_, ss.getId());
+  }
+  form.setDestination(FormApp.DestinationType.SPREADSHEET, ss.getId());
+  Logger.log('練習の回答シート: ' + ss.getUrl());
 }
 
 /** フォームを作って（既存なら項目を全部消して）項目を足す。フォームと、保存する値（フォームIDと氏名欄・クラス欄の項目番号）を返す。 */

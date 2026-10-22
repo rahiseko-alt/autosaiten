@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { practiceFormSpec, practiceMaterial, planFormSetup, rosterByClass } = require('../practice/Practice.js');
+const { practiceFormSpec, practiceMaterial, planFormSetup, planAnswerSheet, rosterByClass } = require('../practice/Practice.js');
 const reception = require('../reception/Reception.js');
 
 test('練習フォームは、氏名欄・クラス欄・説明・ただし書き・タグ名・結果欄の順に並ぶ', () => {
@@ -56,4 +56,10 @@ test('名簿の整理は本番の受付と同じ結果になる', () => {
     { クラス: '国際', 氏名: ' C ' }, { クラス: '', 氏名: 'D' }, { クラス: '総合', 氏名: '' },
   ];
   assert.deepEqual(rosterByClass(rows), reception.rosterByClass(rows));
+});
+
+test('練習の回答を入れるシートは、無ければ新しく作り、あればそれを使う（本番のスプレッドシートは使わない）', () => {
+  assert.deepEqual(planAnswerSheet({}), { action: 'create' });
+  assert.deepEqual(planAnswerSheet(undefined), { action: 'create' });
+  assert.deepEqual(planAnswerSheet({ sheetId: 'xyz' }), { action: 'reuse', sheetId: 'xyz' });
 });
