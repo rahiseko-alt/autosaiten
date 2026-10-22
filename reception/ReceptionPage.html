@@ -84,7 +84,7 @@
         el('formlink').href = r.formUrl;
       } else {
         el('formlink').className = 'hidden';
-        say('回答フォームへの入口を用意できませんでした。先生に連絡してください / The answer form is not ready. Please ask your teacher.', true);
+        say('回答フォームへの入口を用意できませんでした。先生に連絡してください / The answer form is not ready. Please ask your teacher.' + (r.formNote ? ' [' + r.formNote + ']' : ''), true);
       }
       el('result').className = '';
     });

@@ -45,9 +45,12 @@ function claimMaterial(cls, name) {
   }
   var material = materials.filter(function (m) { return Number(m.資料番号) === plan.number; })[0];
   if (!material) throw new Error('資料番号 ' + plan.number + ' の資料がありません。先生に連絡してください');
-  return { number: plan.number, text: String(material.本文), formUrl: rcPrefilledFormUrl_(cls, name) };
+  rcFormNote_ = '';
+  var formUrl = rcPrefilledFormUrl_(cls, name);
+  return { number: plan.number, text: String(material.本文), formUrl: formUrl, formNote: formUrl ? '' : rcFormNote_ };
 }
 
+var rcFormNote_ = '';
 var rcOpened_ = null;
 
 /** 1回の呼び出しの中では、開いたスプレッドシートを使い回す。 */
@@ -84,15 +87,15 @@ function rcReadTable_(sheetName) {
  */
 function rcPrefilledFormUrl_(cls, name) {
   var control = rcSpreadsheet_().getSheetByName('Control');
-  if (!control) return '';
+  if (!control) { rcFormNote_ = 'Control シートがありません'; return ''; }
   var m = String(control.getRange(RC_CONTROL_EDIT_URL_).getValue()).match(/\/forms\/d\/([^/]+)/);
-  if (!m) return '';
+  if (!m) { rcFormNote_ = 'Control の編集URLからフォームを特定できません'; return ''; }
   var formId = m[1];
   var itemOf = {};
   rcReadTable_('FormMapping').forEach(function (r) {
     if (r.form_id === formId) itemOf[r.question_id] = Number(r.form_item_id);
   });
-  if (!itemOf.__NAME__) return '';
+  if (!itemOf.__NAME__) { rcFormNote_ = 'FormMapping に氏名欄の項目番号がありません'; return ''; }
   var placeholder = 'RCNAMEPLACEHOLDER';
   var cache = CacheService.getScriptCache();
   var key = ['prefill', formId, itemOf.__NAME__, itemOf.__CLASS__ || 0,
@@ -102,7 +105,8 @@ function rcPrefilledFormUrl_(cls, name) {
     try {
       template = rcBuildTemplate_(formId, itemOf, cls, placeholder);
     } catch (e) {
-      // 名簿にあってフォームに無いクラスなど。番号と資料は渡し、入口だけ出さない
+      // 名簿にあってフォームに無いクラスなど。番号と資料は渡し、入口だけ出さない。理由は画面に出す
+      rcFormNote_ = String(e && e.message || e);
       return '';
     }
     cache.put(key, template, RC_CACHE_SECONDS_);
