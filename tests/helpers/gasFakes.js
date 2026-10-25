@@ -165,7 +165,10 @@ function createGasContext(options) {
   const props = { document: {}, script: Object.assign({}, options && options.scriptProperties) };
   const triggers = [];
   let formCount = 0;
-  const propsApi = (store) => ({ getProperty: (k) => (k in store ? store[k] : null), setProperty: (k, v) => { store[k] = String(v); } });
+  const propsApi = (store) => ({
+    getProperty: (k) => (k in store ? store[k] : null), setProperty: (k, v) => { store[k] = String(v); },
+    deleteProperty: (k) => { delete store[k]; }
+  });
   const lock = { tryLock: () => true, releaseLock() {} };
   const triggerBuilder = (fn) => {
     const t = { fn, type: null, getHandlerFunction: () => fn };

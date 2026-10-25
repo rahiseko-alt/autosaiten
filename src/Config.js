@@ -39,6 +39,13 @@ var AUTHORING_HEADER_ROW = 10;
 var AUTHORING_LATE = { LABEL_COL: 5, VALUE_COL: 6, CAP_ROW: 1, CLASS_HEADER_ROW: 3, CLASS_FIRST_ROW: 4, CLASS_LAST_ROW: 9 };
 var LATE_CAP_KEY = 'LATE_CAP';
 var CLASS_END_KEY_PREFIX = 'CLASS_END_';
+/**
+ * 保管の印（集計表の「保管する」が Settings に行を足す）と、テスト側がトリガーを外した印（日時）。
+ * どちらも行を足すだけで、Settings の列は変えない。
+ */
+var ARCHIVED_KEY = 'ARCHIVED';
+var TRIGGERS_REMOVED_KEY = 'TRIGGERS_REMOVED';
+var ARCHIVED_MESSAGE = 'このテストは保管済みです。フォームの作成・更新はできません';
 var AUTHORING_STATUS_LABELS = { IDLE: '待機中', VALIDATING: '確認中', BUILDING: 'フォーム作成中', READY: '準備完了', ERROR: 'エラー' };
 
 var SHEET_HEADERS = {

@@ -1,5 +1,5 @@
 /**
- * 集計表の判断（学生の照合、取り込みの計画、要確認の一覧、成績の一覧、名簿の別名、新しいテストの用意）。Apps Script の API には依存しない（ADR 0010）。
+ * 集計表の判断（学生の照合、取り込みの計画、要確認の一覧、成績の一覧、名簿の別名、新しいテストの用意、保管）。Apps Script の API には依存しない（ADR 0010）。
  * 取り込み記録は「テストのID＋回答の番号」を一意キーにし、先生の判断（この学生にする・この回答を使う）を取り込み直しでも残す。
  */
 
@@ -24,6 +24,10 @@ var GB_SETTINGS = [
 ];
 
 var GB_GRADES_NOTICE = '自動で作り直します。書き込みは消えます';
+/** テスト一覧の保管の状態（空は、まだ保管していない）。 */
+var GB_ARCHIVE = { 停止待ち: '停止待ち', 保管済み: '保管済み' };
+/** テスト側の定期処理がまだ進める仕事（src/QueuePlan.js の hasOpenJobs と同じ）。 */
+var GB_OPEN_JOB_STATUSES = ['PENDING', 'RETRY', 'PROCESSING'];
 var GB_MARKS = { 未確定: '（未確定）', 要確認: '（要確認）', 選択待ち: '（選択待ち）' };
 
 function gbText_(v) {
@@ -334,6 +338,93 @@ function templateProblems(template) {
   return problems;
 }
 
+/** FormMapping にある全版のフォームの ID（重複を除き、最初に出た順）。保管のときに受付を閉じ、保管用のフォルダへ移す。 */
+function archiveFormIds(formMapping) {
+  var ids = [];
+  (formMapping || []).forEach(function (r) {
+    var id = gbText_(r.form_id);
+    if (id !== '' && ids.indexOf(id) < 0) ids.push(id);
+  });
+  return ids;
+}
+
+/**
+ * テストを保管できるかを確かめ、止める理由の一覧を返す（次の操作も添える）。止める理由が無ければ []。
+ * Results の合計点は取り込みと同じく __LATE__ の行も含めて足し、取り込み記録の合計点と比べる。
+ * @param {{testId: string, queue: Object[], results: Object[], records: Object[]}} input records はすべてのテストの取り込み記録
+ * @return {string[]}
+ */
+function archiveBlockers(input) {
+  var testId = gbText_(input.testId);
+  var undecided = {};
+  var completed = {};
+  var open = 0;
+  input.queue.forEach(function (j) {
+    var id = gbText_(j.response_id);
+    var status = gbText_(j.status);
+    if (status === 'COMPLETED') completed[id] = true;
+    else if (id !== '') undecided[id] = true;
+    if (GB_OPEN_JOB_STATUSES.indexOf(status) >= 0) open += 1;
+  });
+  var mine = {};
+  var unresolved = 0;
+  input.records.forEach(function (r) {
+    if (gbText_(r.テストのID) !== testId) return;
+    mine[gbText_(r.回答の番号)] = r;
+    if (gbText_(r.理由) !== '') unresolved += 1;
+  });
+  var notImported = gbResponses_(input.results).filter(function (resp) {
+    if (!completed[resp.id]) return false;
+    var rec = mine[resp.id];
+    if (!rec || gbText_(rec.合計点) === '') return true;
+    return isNaN(Number(rec.合計点)) || Math.abs(Number(rec.合計点) - resp.total) > 1e-9;
+  }).length;
+
+  var blockers = [];
+  var undecidedCount = Object.keys(undecided).length;
+  if (undecidedCount > 0) {
+    blockers.push('採点が確定していない回答が' + undecidedCount + '件あります。テストのスプレッドシートで採点を確定してから（「手動採点を反映」など）、もう一度「保管する」を押してください');
+  }
+  if (notImported > 0) {
+    blockers.push('集計表に取り込まれていない確定済みの回答が' + notImported + '件あります。「取り込む」を押してから、もう一度「保管する」を押してください');
+  }
+  if (unresolved > 0) {
+    blockers.push('未解決の要確認が' + unresolved + '件あります。要確認シートで判断を書き、「取り込む」を押してから、もう一度「保管する」を押してください');
+  }
+  if (open > 0) {
+    blockers.push('待ち行列に採点を待つ回答が' + open + '件あります。1分ほどしてから、もう一度「保管する」を押してください');
+  }
+  return blockers;
+}
+
+/**
+ * 「保管する」を押したときにすることを、テスト一覧の保管の状態から決める（2段階）。
+ * 空 → close（全版のフォームの受付を閉じ、停止待ちにする）。
+ * 停止待ち → 止める理由があれば blocked。無ければ、テストの Settings に TRIGGERS_REMOVED（テスト側がトリガーを外した印）が
+ * あれば move（ファイルを保管用のフォルダへ移し、保管済みにする）、まだなら wait。wait と move では ARCHIVED を TRUE にする。
+ * 保管済み → done。それ以外の値 → unknown（何もしない）。
+ * @param {{status: string, blockers: string[], settings: Object[]}} input settings はテストの Settings の行（key・value）
+ * @return {{action: string, message: string}}
+ */
+function archiveStep(input) {
+  var status = gbText_(input.status);
+  if (status === '') {
+    return { action: 'close', message: 'フォームを閉じました。最後の回答の採点が終わるのを待ってから、もう一度『保管する』を押してください' };
+  }
+  if (status === GB_ARCHIVE.保管済み) return { action: 'done', message: '保管済みです' };
+  if (status !== GB_ARCHIVE.停止待ち) {
+    return { action: 'unknown', message: '保管の状態「' + status + '」を読めません。空・停止待ち・保管済みのどれかにしてください' };
+  }
+  if (input.blockers.length > 0) {
+    return { action: 'blocked', message: 'まだ保管できません。\n' + input.blockers.join('\n') };
+  }
+  var removed = (input.settings || []).some(function (r) { return gbText_(r.key) === 'TRIGGERS_REMOVED'; });
+  if (!removed) {
+    return { action: 'wait', message: 'まだ止まっていません。1分ほどしてからもう一度『保管する』を押してください' };
+  }
+  return { action: 'move', message: '保管しました。スプレッドシートと全版のフォームを保管用のフォルダへ移しました' };
+}
+
 /** 新しいテストのスプレッドシートの名前（「科目 実施日 テスト名」。成績の列の見出しと同じ形）。 */
 function newTestName(test) {
   return [gbText_(test.科目), gbDate_(test.実施日), gbText_(test.テスト名)].filter(function (s) { return s !== ''; }).join(' ');
@@ -353,6 +444,7 @@ if (typeof module !== 'undefined') {
     matchStudent: matchStudent, planImport: planImport, reviewRows: reviewRows, applyReviewDecisions: applyReviewDecisions,
     buildGradeTable: buildGradeTable, assignStudentIds: assignStudentIds, spreadsheetIdFromUrl: spreadsheetIdFromUrl,
     planAliasAdditions: planAliasAdditions, rosterForTest: rosterForTest, templateProblems: templateProblems,
-    newTestName: newTestName
+    newTestName: newTestName, GB_ARCHIVE: GB_ARCHIVE, archiveFormIds: archiveFormIds, archiveBlockers: archiveBlockers,
+    archiveStep: archiveStep
   };
 }

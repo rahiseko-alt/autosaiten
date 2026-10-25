@@ -4,6 +4,7 @@
  * 採点の仕組み（src/）・受付ページ（reception/）とは別のプロジェクト。採点の仕組みの関数は呼ばず、
  * 各テストのスプレッドシートは ID で開いて Queue と Results を読むだけにする（ADR 0010）。
  * 新しいテストは、ひな型をドライブでコピーし、名簿シートだけを書き込む。
+ * 保管では、テストのフォームの受付を閉じ、テストの Settings に ARCHIVED の行を足し（列は変えない）、ファイルを移す。
  */
 
 var GB_SHEET_ORDER_ = ['名簿', 'テスト一覧', '成績', '要確認', '取り込み記録', '集計表の設定'];
@@ -15,6 +16,7 @@ function onOpen() {
     .addItem('初期セットアップ', 'setupGradebook')
     .addItem('新しいテストを作る', 'createNewTest')
     .addItem('取り込む', 'importTests')
+    .addItem('保管する', 'archiveTest')
     .addToUi();
 }
 
@@ -122,6 +124,8 @@ function importTests() {
       }
       if (gbText_(t.スプレッドシートのID) === '') gbSetCell_(testTable, i, 'スプレッドシートのID', id);
       t.スプレッドシートのID = id;
+      // 保管済みのテストは後から変わらないので開き直さず、取り込み記録をそのまま使う（成績の一覧には残る）
+      if (gbText_(t.保管の状態) === GB_ARCHIVE.保管済み) return;
       var source;
       try {
         source = SpreadsheetApp.openById(id);
@@ -145,6 +149,84 @@ function importTests() {
   var message = count + '件のテストを取り込みました。';
   if (failures.length > 0) message += '\n取り込めなかったテスト:\n' + failures.join('\n');
   SpreadsheetApp.getUi().alert(message);
+}
+
+/**
+ * テスト一覧で選んだ行のテストを保管する（2段階。何をするかは archiveStep が決める）。
+ * 1回目は全版のフォームの受付を閉じて停止待ちにする。2回目は保管できるかを確かめ、よければ Settings に ARCHIVED を書き、
+ * テスト側がトリガーを外していれば、スプレッドシートと全版のフォームを保管用のフォルダへ移して保管済みにする。
+ */
+function archiveTest() {
+  var message;
+  gbWithLock_(function () {
+    gbEnsureSheets_();
+    var ss = gbSpreadsheet_();
+    var testTable = gbReadTable_('テスト一覧');
+    var sheet = ss.getActiveSheet();
+    var index = sheet.getName() === 'テスト一覧' ? testTable.rowNumbers.indexOf(sheet.getActiveRange().getRow()) : -1;
+    if (index < 0) {
+      message = 'テスト一覧シートで、保管するテストの行を選んでから「保管する」を押してください';
+      return;
+    }
+    var t = testTable.rows[index];
+    var name = gbText_(t.テスト名) || (testTable.rowNumbers[index] + '行目');
+    var id = gbText_(t.スプレッドシートのID) || spreadsheetIdFromUrl(t.スプレッドシートのURL);
+    if (id === '') {
+      message = name + ': スプレッドシートのURLから ID を読めません';
+      return;
+    }
+    if (gbText_(t.保管の状態) === GB_ARCHIVE.保管済み) {
+      message = name + ': ' + archiveStep({ status: t.保管の状態, blockers: [], settings: [] }).message;
+      return;
+    }
+    if (gbText_(t.スプレッドシートのID) === '') gbSetCell_(testTable, index, 'スプレッドシートのID', id);
+
+    var source = SpreadsheetApp.openById(id);
+    var formIds = archiveFormIds(gbReadTable_('FormMapping', source).rows);
+    var settingsTable = gbReadTable_('Settings', source);
+    var step = archiveStep({
+      status: t.保管の状態, settings: settingsTable.rows,
+      blockers: gbText_(t.保管の状態) === GB_ARCHIVE.停止待ち ? archiveBlockers({
+        testId: id, queue: gbReadTable_('Queue', source).rows, results: gbReadTable_('Results', source).rows,
+        records: gbReadTable_('取り込み記録').rows
+      }) : []
+    });
+    message = name + ': ' + step.message;
+
+    if (step.action === 'close') {
+      formIds.forEach(function (formId) { FormApp.openById(formId).setAcceptingResponses(false); });
+      gbSetCell_(testTable, index, '保管の状態', GB_ARCHIVE.停止待ち);
+      return;
+    }
+    if (step.action !== 'wait' && step.action !== 'move') return;
+    var folderId = '';
+    if (step.action === 'move') {
+      gbReadTable_('集計表の設定').rows.forEach(function (r) { if (gbText_(r.項目) === '保管用のフォルダのID') folderId = gbText_(r.値); });
+      if (folderId === '') {
+        message = name + ': 集計表の設定（隠してあるシート）に、保管用のフォルダのIDを入れてから、もう一度「保管する」を押してください';
+        return;
+      }
+    }
+    gbMarkArchived_(settingsTable);
+    if (step.action === 'wait') return;
+    var folder = DriveApp.getFolderById(folderId);
+    [id].concat(formIds).forEach(function (fileId) { DriveApp.getFileById(fileId).moveTo(folder); });
+    gbSetCell_(testTable, index, '保管の状態', GB_ARCHIVE.保管済み);
+    gbSetCell_(testTable, index, '実施中', false);
+  });
+  SpreadsheetApp.getUi().alert(message);
+}
+
+/** テストの Settings の ARCHIVED を TRUE にする。行が無ければ足す（列は変えない）。 */
+function gbMarkArchived_(settingsTable) {
+  if (!settingsTable.sheet) throw new Error('テストのスプレッドシートに Settings シートがありません');
+  var index = settingsTable.rows.map(function (r) { return gbText_(r.key); }).indexOf('ARCHIVED');
+  if (index < 0) {
+    var row = { key: 'ARCHIVED', value: true, 説明: '集計表の「保管する」が書いた保管の印' };
+    settingsTable.sheet.appendRow(settingsTable.headers.map(function (h) { return row[h] === undefined ? '' : row[h]; }));
+  } else if (!gbTrue_(settingsTable.rows[index].value)) {
+    gbSetCell_(settingsTable, index, 'value', true);
+  }
 }
 
 function gbWithLock_(fn) {

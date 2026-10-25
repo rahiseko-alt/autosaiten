@@ -12,10 +12,16 @@ function processGradingQueue() {
   var start = Date.now();
   try {
     var settings = readSettings();
-    ingestNewResponses_();
+    var archived = isArchived(settings);
+    // 保管したテストのフォームは集計表が閉じているので、新しい回答は拾わない
+    if (!archived) ingestNewResponses_();
     recoverStaleJobs_();
 
     var jobs = readQueueRows_();
+    if (archived && !hasOpenJobs(jobs.map(function (j) { return j.job; }))) {
+      removeOwnTriggers_();
+      return;
+    }
     var runnable = pickRunnable(jobs.map(function (j) { return j.job; }), new Date(), Number(settings.WORKER_BATCH_SIZE) || 5);
     var rowOf = {};
     jobs.forEach(function (j) { rowOf[j.job.job_id] = j.rowIndex; });
@@ -29,6 +35,16 @@ function processGradingQueue() {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * 保管したテストの自動処理を止める。このプロジェクトのトリガーをすべて外し、
+ * 集計表が確かめられるよう Settings に TRIGGERS_REMOVED（日時）を書く。
+ */
+function removeOwnTriggers_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  setSetting(TRIGGERS_REMOVED_KEY, new Date());
+  writeLog('INFO', 'TRIGGERS_REMOVED', '', '保管済みのため、自動処理のトリガーを外しました');
 }
 
 function readQueueRows_() {

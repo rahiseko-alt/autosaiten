@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   matchStudent, planImport, applyReviewDecisions, reviewRows, buildGradeTable, assignStudentIds, spreadsheetIdFromUrl,
-  planAliasAdditions, rosterForTest, templateProblems, newTestName
+  planAliasAdditions, rosterForTest, templateProblems, newTestName, archiveStep, archiveBlockers, archiveFormIds
 } = require('../gradebook/Gradebook.js');
 
 const roster = [
@@ -298,4 +298,118 @@ test('ひな型にまだ無いシート（初期セットアップ前）は、�
 
 test('新しいテストのファイル名は「科目 実施日 テスト名」', () => {
   assert.equal(newTestName({ 科目: 'リテラシー', 実施日: '2026/11/6', テスト名: '第3回' }), 'リテラシー 2026-11-06 第3回');
+});
+
+// --- 保管する ---
+
+test('保管の状態が空なら、1回目としてフォームを閉じる', () => {
+  const step = archiveStep({ status: '', blockers: [], settings: [] });
+  assert.equal(step.action, 'close');
+  assert.match(step.message, /フォームを閉じました。最後の回答の採点が終わるのを待ってから、もう一度『保管する』を押してください/);
+});
+
+test('停止待ちで止める理由があれば、理由の一覧を出して止める', () => {
+  const step = archiveStep({ status: '停止待ち', blockers: ['理由A', '理由B'], settings: [] });
+  assert.equal(step.action, 'blocked');
+  assert.match(step.message, /理由A\n理由B/);
+});
+
+test('停止待ちで理由が無く、テストがまだトリガーを外していなければ、保管の印を書いて待つ', () => {
+  const step = archiveStep({ status: '停止待ち', blockers: [], settings: [{ key: 'ARCHIVED', value: true }] });
+  assert.equal(step.action, 'wait');
+  assert.match(step.message, /まだ止まっていません。1分ほどしてからもう一度『保管する』を押してください/);
+});
+
+test('停止待ちで理由が無く、TRIGGERS_REMOVED があれば、ファイルを移して保管済みにする', () => {
+  const step = archiveStep({ status: '停止待ち', blockers: [], settings: [{ key: 'ARCHIVED', value: true }, { key: 'TRIGGERS_REMOVED', value: 'TRUE' }] });
+  assert.equal(step.action, 'move');
+});
+
+test('TRIGGERS_REMOVED があっても、止める理由があれば移さない', () => {
+  const step = archiveStep({ status: '停止待ち', blockers: ['理由A'], settings: [{ key: 'TRIGGERS_REMOVED', value: true }] });
+  assert.equal(step.action, 'blocked');
+});
+
+test('保管済みなら、何もせずにそう伝える', () => {
+  const step = archiveStep({ status: '保管済み', blockers: ['理由A'], settings: [] });
+  assert.equal(step.action, 'done');
+  assert.match(step.message, /保管済みです/);
+});
+
+test('保管の状態が読めない値なら、何もせずに直し方を伝える', () => {
+  const step = archiveStep({ status: '途中', blockers: [], settings: [] });
+  assert.equal(step.action, 'unknown');
+  assert.match(step.message, /停止待ち/);
+});
+
+test('閉じるフォームは、FormMapping の form_id の重複を除いたもの', () => {
+  assert.deepEqual(archiveFormIds([
+    { form_id: 'f1', question_id: 'Q001' }, { form_id: 'f1', question_id: 'Q002' }, { form_id: ' f2 ' }, { form_id: '' }
+  ]), ['f1', 'f2']);
+});
+
+const archiveInput = (over) => Object.assign({
+  testId: 'T1',
+  queue: done('r1', 'r2'),
+  results: [row('r1', 'Q001', 5, taro), row('r1', '__LATE__', -1, taro), row('r2', 'Q001', 7, hanako)],
+  records: [
+    { テストのID: 'T1', 回答の番号: 'r1', 状態: '確定', 合計点: 4, 理由: '' },
+    { テストのID: 'T1', 回答の番号: 'r2', 状態: '確定', 合計点: 7, 理由: '' }
+  ]
+}, over);
+
+test('すべて確定して取り込み済みで、要確認も待ち行列も無ければ、止める理由は無い', () => {
+  assert.deepEqual(archiveBlockers(archiveInput({})), []);
+});
+
+test('Queue で COMPLETED でない回答があれば、未確定の回答として止める', () => {
+  const blockers = archiveBlockers(archiveInput({ queue: done('r1').concat([{ response_id: 'r2', status: 'REVIEW_REQUIRED' }]) }));
+  assert.equal(blockers.length, 1);
+  assert.match(blockers[0], /採点が確定していない回答が1件/);
+});
+
+test('確定済みなのに取り込み記録に無い回答があれば、「取り込む」を促して止める', () => {
+  const blockers = archiveBlockers(archiveInput({ records: [{ テストのID: 'T1', 回答の番号: 'r1', 状態: '確定', 合計点: 4, 理由: '' }] }));
+  assert.equal(blockers.length, 1);
+  assert.match(blockers[0], /取り込まれていない確定済みの回答が1件/);
+  assert.match(blockers[0], /「取り込む」/);
+});
+
+test('取り込み記録の合計点が今の Results と違えば（空欄を含む）、取り込まれていないとみなす', () => {
+  const changed = archiveBlockers(archiveInput({ results: [row('r1', 'Q001', 6, taro), row('r1', '__LATE__', -1, taro), row('r2', 'Q001', 7, hanako)] }));
+  assert.match(changed[0], /取り込まれていない確定済みの回答が1件/);
+  const blank = archiveBlockers(archiveInput({
+    results: [row('r1', 'Q001', 0, taro), row('r2', 'Q001', 7, hanako)],
+    records: [{ テストのID: 'T1', 回答の番号: 'r1', 状態: '未確定', 合計点: '', 理由: '' }, { テストのID: 'T1', 回答の番号: 'r2', 状態: '確定', 合計点: 7, 理由: '' }]
+  }));
+  assert.match(blank[0], /取り込まれていない確定済みの回答が1件/);
+});
+
+test('ほかのテストの取り込み記録は、このテストの取り込み済みに数えない', () => {
+  const blockers = archiveBlockers(archiveInput({ records: [
+    { テストのID: 'T0', 回答の番号: 'r1', 状態: '確定', 合計点: 4, 理由: '名簿に無い' },
+    { テストのID: 'T1', 回答の番号: 'r2', 状態: '確定', 合計点: 7, 理由: '' }
+  ] }));
+  assert.equal(blockers.length, 1);
+  assert.match(blockers[0], /取り込まれていない確定済みの回答が1件/);
+});
+
+test('このテストの取り込み記録に理由が残っていれば、未解決の要確認として止める', () => {
+  const blockers = archiveBlockers(archiveInput({ records: [
+    { テストのID: 'T1', 回答の番号: 'r1', 状態: '確定', 合計点: 4, 理由: '2回送信' },
+    { テストのID: 'T1', 回答の番号: 'r2', 状態: '確定', 合計点: 7, 理由: '' }
+  ] }));
+  assert.equal(blockers.length, 1);
+  assert.match(blockers[0], /未解決の要確認が1件/);
+  assert.match(blockers[0], /要確認シート/);
+});
+
+test('待ち行列に採点を待つ仕事（PENDING・PROCESSING・RETRY）があれば、空でないとして止める', () => {
+  const queue = done('r1', 'r2').concat([
+    { response_id: 'r3', status: 'PENDING' }, { response_id: 'r4', status: 'RETRY' }, { response_id: 'r5', status: 'PROCESSING' }
+  ]);
+  const blockers = archiveBlockers(archiveInput({ queue }));
+  assert.equal(blockers.length, 2);
+  assert.match(blockers[0], /採点が確定していない回答が3件/);
+  assert.match(blockers[1], /待ち行列に採点を待つ回答が3件/);
 });

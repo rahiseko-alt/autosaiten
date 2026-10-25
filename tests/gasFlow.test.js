@@ -627,3 +627,78 @@ test('授業外の上限点が数でなければ、「これでOK」でエラー
   assert.equal(control(env, 'STATUS'), 'ERROR');
   assert.ok(String(control(env, 'MESSAGE')).includes('授業外の上限点'), control(env, 'MESSAGE'));
 });
+
+/** 集計表の「保管する」が書く保管の印（Settings に行を足す）。 */
+function markArchived(env) {
+  env.ss.getSheetByName('Settings').appendRow(['ARCHIVED', true, '']);
+}
+
+test('保管の印があり待ち行列に未完了の仕事が無ければ、トリガーを外して TRIGGERS_REMOVED を書き、新しい回答は取り込まない', () => {
+  const env = prepare();
+  pressOk(env);
+  env.forms.form1.submit({ '氏名（Name）': '山田', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.ctx.processGradingQueue();
+  assert.equal(env.triggers.length, 2);
+  markArchived(env);
+  env.forms.form1.submit({ '氏名（Name）': '佐藤', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.ctx.processGradingQueue();
+  assert.equal(env.triggers.length, 0);
+  assert.equal(Object.prototype.toString.call(env.ctx.readSettings().TRIGGERS_REMOVED), '[object Date]');
+  assert.equal(env.ss.getSheetByName('Queue').getLastRow(), 2); // 2件目は取り込まない
+  assert.deepEqual(env.ss.getSheetByName('Settings').rows[0], ['key', 'value', '説明']);
+});
+
+test('保管の印があっても、待ち行列に未完了の仕事が残っていれば処理を続け、終わってからトリガーを外す', () => {
+  const env = prepare();
+  pressOk(env);
+  env.ctx.setSetting('WORKER_BATCH_SIZE', 1);
+  env.forms.form1.submit({ '氏名（Name）': '山田', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.forms.form1.submit({ '氏名（Name）': '佐藤', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.ctx.processGradingQueue();
+  const queue = env.ss.getSheetByName('Queue');
+  assert.deepEqual([queue.cell(2, 5), queue.cell(3, 5)], ['COMPLETED', 'PENDING']);
+  markArchived(env);
+  env.ctx.processGradingQueue();
+  assert.equal(queue.cell(3, 5), 'COMPLETED');
+  assert.equal(env.triggers.length, 2);
+  assert.equal(env.ctx.readSettings().TRIGGERS_REMOVED, undefined);
+  env.ctx.processGradingQueue();
+  assert.equal(env.triggers.length, 0);
+});
+
+test('保管済みのテストでは「これでOK」は何もせず、保管済みと知らせる', () => {
+  const env = prepare();
+  pressOk(env);
+  markArchived(env);
+  env.ss.getSheetByName('試験作成').put(11, 2, '首都は？');
+  const range = pressOk(env);
+  assert.ok(String(control(env, 'MESSAGE')).includes('このテストは保管済みです'), control(env, 'MESSAGE'));
+  assert.ok(String(env.ss.getSheetByName('試験作成').getRange('B4').getValue()).includes('このテストは保管済みです'));
+  assert.equal(env.ss.getSheetByName('Questions').cell(2, 4), '日本の首都は？');
+  assert.equal(env.forms.form1.items.some((i) => i.title === '首都は？'), false);
+  assert.equal(range.getValue(), false);
+});
+
+test('初期セットアップで、この表の FormMapping に無いフォームの記録（コピー元のもの）を消す', () => {
+  const env = createGasContext();
+  Object.assign(env.props.document, { ACTIVE_FORM_ID: 'formOfOrigin', FORM_VERSION: '3', DEFINITION_HASH: 'abc' });
+  env.ctx.setupSystem();
+  assert.deepEqual(env.props.document, {});
+  pressOk(prepareRows(env));
+  assert.equal(Object.keys(env.forms).length, 1);
+  assert.equal(control(env, 'FORM_VERSION'), 1);
+});
+
+test('初期セットアップをやり直しても、このテストのフォームの記録は残る', () => {
+  const env = prepare();
+  pressOk(env);
+  const before = Object.assign({}, env.props.document);
+  env.ctx.setupSystem();
+  assert.deepEqual(env.props.document, before);
+  assert.equal(before.ACTIVE_FORM_ID, 'form1');
+});
+
+function prepareRows(env) {
+  fillAuthoring(env, [A('日本の首都は？', '短答', 5, '東京', '東京都')]);
+  return env;
+}

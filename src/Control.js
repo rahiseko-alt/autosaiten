@@ -29,6 +29,11 @@ function handleControlEdit(e) {
 
 function runBuildFlow_() {
   try {
+    if (isArchived(readSettings())) {
+      // 保管したテストはフォームを閉じて保管用のフォルダへ移すので、作り直さない
+      setControl('MESSAGE', ARCHIVED_MESSAGE);
+      return;
+    }
     setControl('STATUS', 'VALIDATING');
     setControl('MESSAGE', '設定を確認しています');
     var prepared = prepareAuthoring_();
