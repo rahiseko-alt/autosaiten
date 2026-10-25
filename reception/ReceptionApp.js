@@ -4,11 +4,16 @@
  * 採点の仕組み（src/）とは別の Apps Script プロジェクトにしてある。誰でも開けるウェブアプリでは、
  * 末尾が _ でない関数はすべて画面から呼べてしまうため、採点の仕組みの関数を同じプロジェクトに置かない（ADR 0009）。
  * 外から呼べるのは doGet・getReceptionRoster・claimMaterial と、Reception.js の害の無い判断だけ。
- * スプレッドシートの ID は、導入時に作る LocalSettings.js（GitHub には置かない）の SPREADSHEET_ID で受け取る。
+ * 導入時に作る LocalSettings.js（GitHub には置かない）では、テストではなく集計表の ID（GRADEBOOK_ID）を受け取る。
+ * 案内先のテストは、集計表のテスト一覧で「受付ページを使う」と「実施中」の両方に印の付いた行で決まる（ADR 0012）。
  */
 
 var RC_CONTROL_EDIT_URL_ = 'B7';
 var RC_CACHE_SECONDS_ = 21600;
+var RC_TESTS_CACHE_SECONDS_ = 60;
+// 集計表のテスト一覧で読む列（gradebook/Gradebook.js の GB_SHEETS の見出しと同じ）。名簿・成績など他のシートは開かない
+var RC_GRADEBOOK_SHEET_ = 'テスト一覧';
+var RC_GRADEBOOK_COLUMNS_ = ['受付ページを使う', '実施中', 'スプレッドシートのID'];
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('ReceptionPage')
@@ -53,17 +58,51 @@ function claimMaterial(cls, name) {
 var rcFormNote_ = '';
 var rcOpened_ = null;
 
-/** 1回の呼び出しの中では、開いたスプレッドシートを使い回す。 */
+/** 1回の呼び出しの中では、開いたスプレッドシート（案内先のテスト）を使い回す。 */
 function rcSpreadsheet_() {
   if (rcOpened_) return rcOpened_;
-  var notReady = '受付ページの準備ができていません（スプレッドシートを開けません）。先生に連絡してください';
-  if (typeof SPREADSHEET_ID === 'undefined' || !/^[A-Za-z0-9_-]{20,}$/.test(String(SPREADSHEET_ID))) throw new Error(notReady);
+  var id = chooseReceptionTest(rcGradebookTests_());
   try {
-    rcOpened_ = SpreadsheetApp.openById(SPREADSHEET_ID);
+    rcOpened_ = SpreadsheetApp.openById(id);
+  } catch (e) {
+    throw new Error('受付ページの準備ができていません（テストのスプレッドシートを開けません）。先生に連絡してください');
+  }
+  return rcOpened_;
+}
+
+/**
+ * 集計表のテスト一覧から、受付ページを使う・実施中・スプレッドシートのIDの3列だけを読む。
+ * 学生が開くたびに集計表を開かないよう、60秒ほど覚えておく（印を付け替えても1分ほどで切り替わる）。
+ */
+function rcGradebookTests_() {
+  var cache = CacheService.getScriptCache();
+  var key = 'gradebookTests';
+  var cached = cache.get(key);
+  if (cached) return JSON.parse(cached);
+
+  var notReady = '受付ページの準備ができていません（集計表を開けません）。先生に連絡してください';
+  if (typeof GRADEBOOK_ID === 'undefined' || !/^[A-Za-z0-9_-]{20,}$/.test(String(GRADEBOOK_ID))) throw new Error(notReady);
+  var sheet;
+  try {
+    sheet = SpreadsheetApp.openById(GRADEBOOK_ID).getSheetByName(RC_GRADEBOOK_SHEET_);
   } catch (e) {
     throw new Error(notReady);
   }
-  return rcOpened_;
+  if (!sheet) throw new Error('受付ページの準備ができていません（集計表にテスト一覧のシートがありません）。先生に連絡してください');
+  var lastRow = sheet.getLastRow();
+  var headers = lastRow < 1 ? [] : sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(rcText_);
+  var columns = RC_GRADEBOOK_COLUMNS_.map(function (h) {
+    var col = headers.indexOf(h) + 1;
+    if (col < 1) throw new Error('受付ページの準備ができていません（テスト一覧に「' + h + '」の列がありません）。先生に連絡してください');
+    return lastRow < 2 ? [] : sheet.getRange(2, col, lastRow - 1, 1).getValues().map(function (r) { return r[0]; });
+  });
+  var tests = (columns[0] || []).map(function (_, i) {
+    var row = {};
+    RC_GRADEBOOK_COLUMNS_.forEach(function (h, c) { row[h] = columns[c][i]; });
+    return row;
+  });
+  cache.put(key, JSON.stringify(tests), RC_TESTS_CACHE_SECONDS_);
+  return tests;
 }
 
 function rcReadTable_(sheetName) {
