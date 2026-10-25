@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { recomputeResponses, scoresToWriteBack } = require('../src/Finalize.js');
+const { recomputeResponses } = require('../src/Finalize.js');
 
 function row(over) {
   return Object.assign({ response_id: 'r1', question_id: 'Q1', grading_mode: 'AUTO', status: 'AUTO_GRADED', auto_score: 5, llm_score: '', manual_score: '', final_score: 5 }, over);
@@ -28,11 +28,6 @@ test('回答ごとに別々に判定する', () => {
   const rows = [row(), row({ response_id: 'r2', grading_mode: 'MANUAL', status: 'MANUAL_PENDING', auto_score: '', final_score: '' })];
   const out = recomputeResponses(rows);
   assert.deepEqual([out.r1.finalized, out.r2.finalized], [true, false]);
-});
-
-test('書き戻す点数は、最終点が入っている問題だけ', () => {
-  const rows = [row(), row({ question_id: 'Q2', final_score: '' }), row({ question_id: 'Q3', final_score: 0, status: 'UNANSWERED' })];
-  assert.deepEqual(scoresToWriteBack(rows), [{ question_id: 'Q1', score: 5 }, { question_id: 'Q3', score: 0 }]);
 });
 
 test('不正な manual_score は無視して確定させず、理由を返す', () => {

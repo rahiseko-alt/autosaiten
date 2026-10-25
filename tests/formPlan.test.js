@@ -43,7 +43,7 @@ test('回答が無ければ既存フォームを同期、あれば新しい版',
   assert.equal(decideFormAction({ hasForm: true, responseCount: 1, sameDefinition: false }), 'NEW_VERSION');
 });
 
-test('フォーム仕様: 問題タイプごとの種類・必須・配点・選択肢', () => {
+test('フォーム仕様: 問題タイプごとの種類・必須・選択肢（問題の項目には点数も正解も付けない）', () => {
   const spec = buildFormSpec([
     q(),
     q({ question_id: 'Q2', question_type: 'MULTIPLE_CHOICE', auto_rule: 'NATIVE', correct_answer: 'Price', options: 'Product||Price||Place', section: '基礎' }),
@@ -53,9 +53,9 @@ test('フォーム仕様: 問題タイプごとの種類・必須・配点・選
   assert.equal(spec.items.length, 4);
   assert.deepEqual(spec.items.map(i => i.kind), ['TEXT', 'MULTIPLE_CHOICE', 'CHECKBOX', 'PARAGRAPH']);
   assert.deepEqual(spec.items[1].choices, [
-    { value: 'Product', correct: false }, { value: 'Price', correct: true }, { value: 'Place', correct: false }]);
-  assert.deepEqual(spec.items[2].choices.map(c => c.correct), [true, false, true]);
-  assert.equal(spec.items[3].points, 10);
+    { value: 'Product', correct: false }, { value: 'Price', correct: false }, { value: 'Place', correct: false }]);
+  assert.deepEqual(spec.items[2].choices.map(c => c.correct), [false, false, false]);
+  assert.equal(spec.items.some(i => i.points !== undefined), false);
   assert.equal(spec.items[3].required, false);
 });
 
@@ -81,7 +81,7 @@ test('フォーム仕様: 問題文の最初の改行までを見出し、残り
 test('フォーム仕様: 既定で1人1回に制限し、先頭に必須の氏名欄を置く', () => {
   const spec = buildFormSpec([q()], settings);
   assert.equal(spec.limitOneResponse, true);
-  assert.deepEqual(spec.nameItem, { title: '氏名（Name）', required: true });
+  assert.deepEqual([spec.nameItem.title, spec.nameItem.required], ['氏名（Name）', true]);
   assert.equal(buildFormSpec([q()], Object.assign({}, settings, { LIMIT_ONE_RESPONSE: 'FALSE' })).limitOneResponse, false);
 });
 
@@ -91,7 +91,6 @@ test('説明の欄は答えのない項目になり、見出しと説明に分�
   assert.equal(spec.items[0].kind, 'INFO');
   assert.equal(spec.items[0].title, 'ただし書き');
   assert.equal(spec.items[0].help_text, '2行目');
-  assert.equal(spec.items[0].points, 0);
   assert.equal(spec.items[0].required, false);
 });
 
@@ -105,4 +104,19 @@ test('クラスの一覧が無ければクラス欄は付かず、定義の指�
   assert.equal('classItem' in buildFormSpec([q()], settings), false);
   assert.equal('classItem' in buildFormSpec([q()], settings, []), false);
   assert.equal(definitionHash([q()], settings, []), definitionHash([q()], settings));
+});
+
+test('氏名欄の配点は満点（掲載した問題の配点の合計）になる', () => {
+  const spec = buildFormSpec([
+    q(),
+    q({ question_id: 'Q2', points: 10 }),
+    q({ question_id: 'Q3', points: 7, enabled: false }),
+    q({ question_id: 'Q4', question_type: 'INFO', grading_mode: 'NONE', points: '' }),
+    q({ question_id: 'Q5', question_type: 'PARAGRAPH', grading_mode: 'MANUAL', points: 0 })
+  ], settings);
+  assert.equal(spec.nameItem.points, 15);
+});
+
+test('配点を変えると、定義の指紋も変わる（氏名欄の満点を直すため）', () => {
+  assert.notEqual(definitionHash([q()], settings), definitionHash([q({ points: 6 })], settings));
 });

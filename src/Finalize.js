@@ -42,13 +42,6 @@ function recomputeResponses(resultRows) {
   return out;
 }
 
-/** フォームへ書き戻す点数（最終点が入っている問題だけ）。 */
-function scoresToWriteBack(rows) {
-  return rows
-    .filter(function (r) { return !fnBlank_(r.final_score); })
-    .map(function (r) { return { question_id: r.question_id, score: Number(r.final_score) }; });
-}
-
 if (typeof module !== 'undefined') {
-  module.exports = { recomputeResponses: recomputeResponses, scoresToWriteBack: scoresToWriteBack };
+  module.exports = { recomputeResponses: recomputeResponses };
 }

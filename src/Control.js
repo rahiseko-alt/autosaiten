@@ -2,6 +2,8 @@
  * Control シートの「これでOK」。検証 -> フォーム生成 -> 表示更新 を一度に実行する。
  */
 
+var PUBLISH_GRADES_GUIDE = 'フォームの設定で、成績の公開を『後で手動で公開』にしてください（確定前の点数が学生に見えないように）';
+
 function handleControlEdit(e) {
   if (!e || !e.range) return;
   var sheet = e.range.getSheet();
@@ -51,11 +53,14 @@ function runBuildFlow_() {
     setControl('STATUS', 'BUILDING');
     setControl('MESSAGE', 'フォームを作っています');
     writeLog('INFO', 'BUILD_STARTED', '', 'フォーム生成を開始しました');
-    buildOrVersionForm();
+    var action = buildOrVersionForm();
     installRequiredTriggers();
     updateControlSummary(questions);
     setControl('STATUS', 'READY');
-    setControl('MESSAGE', '準備ができました。フォームURLを学生に配ってください');
+    var message = '準備ができました。フォームURLを学生に配ってください';
+    // 成績の公開の設定は仕組みから変えられないので、新しいフォームのたびに先生に頼む（ADR 0013）
+    if (action === 'CREATE' || action === 'NEW_VERSION') message += '\n' + PUBLISH_GRADES_GUIDE;
+    setControl('MESSAGE', message);
     writeLog('INFO', 'BUILD_COMPLETED', '', 'フォーム生成が完了しました');
   } catch (err) {
     setControl('STATUS', 'ERROR');

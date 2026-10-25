@@ -31,10 +31,9 @@ function buildFormSpec(questions, settings, classes) {
     var header = (section !== '' && section !== previousSection) ? section : null;
     if (section !== '') previousSection = section;
 
-    var nativeChoice = String(q.auto_rule || '').trim() === 'NATIVE';
-    var correct = fpSplit_(q.correct_answer);
+    // 選択式もフォームの自動採点は使わず、仕組みの中で採点する（ADR 0013）。正解は設定しない
     var choices = fpSplit_(q.options).map(function (value) {
-      return { value: value, correct: nativeChoice && correct.indexOf(value) >= 0 };
+      return { value: value, correct: false };
     });
     // フォームの質問の見出しは1行しか出ないので、最初の改行より後ろは見出しの下の説明欄に入れる
     var text = String(q.question_text).replace(/\r\n?/g, '\n');
@@ -45,20 +44,23 @@ function buildFormSpec(questions, settings, classes) {
       title: cut < 0 ? text : text.slice(0, cut).trim(),
       help_text: cut < 0 ? '' : text.slice(cut + 1).trim(),
       required: q.question_type === 'INFO' ? false : fpRequired_(q),
-      points: q.question_type === 'INFO' ? 0 : (Number(q.points) || 0),
       choices: choices,
       section_header: header,
       feedback_correct: String(q.feedback_correct || ''),
       feedback_incorrect: String(q.feedback_incorrect || '')
     };
   });
+  // 問題の項目には点数を付けず、氏名欄の配点を満点にする（フォームには合計点だけを出す。ADR 0013）
+  var total = questions.filter(fpEnabled_).reduce(function (sum, q) {
+    return sum + (q.question_type === 'INFO' ? 0 : (Number(q.points) || 0));
+  }, 0);
   var spec = {
     title: String(settings.FORM_TITLE || ''),
     description: String(settings.FORM_DESCRIPTION || ''),
     collectEmail: settings.COLLECT_EMAIL === true || String(settings.COLLECT_EMAIL).toUpperCase() === 'TRUE',
     // 既定は1人1回。Settings で FALSE にしたときだけ外す
     limitOneResponse: !(settings.LIMIT_ONE_RESPONSE === false || String(settings.LIMIT_ONE_RESPONSE).toUpperCase() === 'FALSE'),
-    nameItem: { title: '氏名（Name）', required: true },
+    nameItem: { title: '氏名（Name）', required: true, points: total },
     items: items
   };
   // クラス欄が無いときは項目ごと入れない（定義の指紋を、クラス欄ができる前と同じに保つ）

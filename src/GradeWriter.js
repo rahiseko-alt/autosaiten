@@ -52,32 +52,29 @@ function writeResultValues_(sheet, startRow, valueRows) {
 }
 
 /**
- * 確定した回答の点数をフォームへ書き戻す。確定していない回答では呼ばない（ADR 0003）。
+ * 確定した回答の合計点と講評をフォームへ書き戻す。確定していない回答では呼ばない（ADR 0003）。
+ * 問題の項目には書かず、氏名欄にだけ合計点と講評を書く（ADR 0013）。
  * フォームの送信イベントは使っていないので、書き戻しで新しい job は作られない（ADR 0005）。
  */
 function writeBackScores(formId, responseId, rows) {
   var form = FormApp.openById(formId);
   var formResponse = form.getResponse(responseId);
-  var itemOfQuestion = {};
+  var nameItemId = null;
   readTable(SHEET_NAMES.FORM_MAPPING).forEach(function (m) {
-    if (m.form_id === formId) itemOfQuestion[m.question_id] = Number(m.form_item_id);
+    if (m.form_id === formId && m.question_id === NAME_QUESTION_ID) nameItemId = Number(m.form_item_id);
   });
-
-  var noPoints = {};
-  rows.forEach(function (r) { if (r.status === 'NO_POINTS') noPoints[r.question_id] = true; });
-  var graded = 0;
-  scoresToWriteBack(rows).forEach(function (s) {
-    var itemId = itemOfQuestion[s.question_id];
-    // 加点なしの欄は採点の対象ではないので、点を付けない
-    if (itemId === undefined || noPoints[s.question_id]) return;
-    var itemResponse = formResponse.getGradableResponseForItem(form.getItemById(itemId));
-    if (!itemResponse) return; // 未回答の項目には点を付けられない
-    itemResponse.setScore(s.score);
-    formResponse.withItemGrade(itemResponse);
-    graded += 1;
-  });
-  if (graded > 0) form.submitGrades([formResponse]);
-  writeLog('INFO', 'GRADE_SUBMITTED', responseId, 'フォームへ点数を反映しました', { items: graded });
+  var itemResponse = nameItemId === null ? null : formResponse.getGradableResponseForItem(form.getItemById(nameItemId));
+  if (!itemResponse) {
+    // 氏名欄は必須なので通常は起きない。点を書き込む先が無いので、記録だけ残す
+    writeLog('WARN', 'GRADE_NOT_SUBMITTED', responseId, '氏名欄が見つからないため、フォームへ点数を反映できませんでした');
+    return;
+  }
+  var total = totalScore(rows);
+  itemResponse.setScore(total);
+  itemResponse.setFeedback(FormApp.createFeedback().setText(buildCommentary(rows)).build());
+  formResponse.withItemGrade(itemResponse);
+  form.submitGrades([formResponse]);
+  writeLog('INFO', 'GRADE_SUBMITTED', responseId, 'フォームへ合計点と講評を反映しました', { total: total });
 }
 
 /**
