@@ -12,7 +12,7 @@
 
 **決めたこと**
 
-- テスト「マーケティング 2026-10-26 第1回」 https://docs.google.com/spreadsheets/d/1GdVbu-nvAbB98ziRLVnEsRNPDbAfufoTIyJ1EqmPImM/edit （集計表のテスト一覧に登録、実施中）。初期セットアップ済み、名簿60名
+- テスト「マーケティング 2026-10-26 第1回」 https://docs.google.com/spreadsheets/d/1EqfsynYoSfjAYrIHkcAqZ_HVNTz6xvHsku6qTmSsmzQ/edit （採点結果の欄を選択式にした #62 の仕組みで作り直した。古いものはゴミ箱。集計表のテスト一覧に登録、実施中）。初期セットアップ済み、名簿61名（先生「小齊平 恒平」を国際で追加、集計表の名簿にもアカウント付きで追加）
 - 問1 2点・問2 2点・問3 4点（満点8点）。授業外の上限4点。終わる時刻は両クラス 2026/10/26 12:00
 - 採点は Claude が行い、Results に manual_score と講評を書く。正答と採点の観点は試験作成シートの E・H 列（問1「40代後半～50代の女性」、問2「申し込み」、問3は4点か0点で、問1・問2の両方が正解のときだけ採点）
 
