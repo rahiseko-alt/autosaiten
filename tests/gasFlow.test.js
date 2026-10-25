@@ -80,6 +80,12 @@ test('「これでOK」でフォームができ、READY になり、対応表と
   assert.equal(Object.keys(env.forms).length, 1);
 });
 
+test('初期設定のままなら、フォームは回答者のアカウント（メールアドレス）を集める', () => {
+  const env = prepare();
+  pressOk(env);
+  assert.equal(Object.values(env.forms)[0].collectEmail, true);
+});
+
 test('状態・メッセージ・フォームURL・合計点は、試験作成シートにも出る', () => {
   const env = prepare();
   pressOk(env);

@@ -86,7 +86,7 @@ var DEFAULT_SETTINGS = [
   ['LLM_MAX_RETRIES', 2, 'API再試行'],
   ['WORKER_BATCH_SIZE', 5, '1回に処理する回答数'],
   ['AUTO_CLOSE_OLD_FORM', true, '新版作成時に旧フォームを閉じる'],
-  ['COLLECT_EMAIL', false, 'Forms設定'],
+  ['COLLECT_EMAIL', true, '回答者のアカウント（メールアドレス）を集める。Classroom へ返すときの照合に使う'],
   ['FORM_TITLE', 'AIビジネス専門学校 テスト', 'タイトル'],
   ['FORM_DESCRIPTION', '', '説明'],
   ['PROMPT_VERSION', 1, '採点プロンプト版'],
