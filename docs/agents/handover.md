@@ -17,7 +17,8 @@
 
 **次にやること**
 
-- 先生が本番で「これでOK」→ フォームの設定（成績の発表を手動・点数オン）→ URLを配る
+- （済）本番は「これでOK」済み。学生に配るURL https://docs.google.com/forms/d/e/1FAIpQLScQd2OVxthvnwWVYLuRcOQzdEjx1TLzOCTRXTwCY1SGtOYA2A/viewform 、編集 https://docs.google.com/forms/d/1A_TfvH6ni4Hbi8YFZKq5tHFi9X7cQqdVrOZBimdtgZs/edit 。先生の試しの回答は、フォーム・Results・Queue から消し、回答0件の状態
+- 先生が自分で作ったフォームは取り込めない。問題文と模範解答を貼ってもらい、ひな型から作り直す
 - 本番後、Claude が採点 → 先生が「手動採点を反映」→「成績を公開」→ URL をグループチャットへ → 集計表で「取り込む」→「保管する」
 
 **未解決の問題**
