@@ -7,6 +7,9 @@ function fillAuthoring(env, rows) {
   rows.forEach((row, i) => row.forEach((v, c) => sheet.put(11 + i, c + 1, v)));
 }
 
+/** 最後に付く採点結果の欄の題（合計点と講評の受け皿。ADR 0013）。 */
+const RESULT = '採点結果（ここに「確認」と入力してください）';
+
 const A = (text, kind, points, correct, alt, options, viewpoint) =>
   [true, text, kind, points, correct || '', alt || '', options || '', viewpoint || '', true, ''];
 
@@ -76,7 +79,7 @@ test('「これでOK」でフォームができ、READY になり、対応表と
   assert.ok(String(control(env, 'FORM_URL')).startsWith('https://forms.example/'));
   assert.equal(control(env, 'FORM_VERSION'), 1);
   assert.equal(control(env, 'TOTAL_POINTS'), 10);
-  assert.equal(env.ss.getSheetByName('FormMapping').getLastRow(), 4); // 見出し + 氏名欄 + 2問
+  assert.equal(env.ss.getSheetByName('FormMapping').getLastRow(), 5); // 見出し + 氏名欄 + 2問 + 採点結果の欄
   assert.equal(Object.keys(env.forms).length, 1);
 });
 
@@ -173,7 +176,7 @@ test('回答が無いフォームは、同じフォームのまま同期され�
   pressOk(env);
   assert.equal(Object.keys(env.forms).length, 1);
   assert.equal(control(env, 'FORM_VERSION'), 1);
-  assert.equal(env.ss.getSheetByName('FormMapping').getLastRow(), 4);
+  assert.equal(env.ss.getSheetByName('FormMapping').getLastRow(), 5);
 });
 
 function putRoster(env, rows) {
@@ -214,13 +217,13 @@ test('掲載を外した問題はフォームに載らない', () => {
   const env = prepare();
   env.ss.getSheetByName('試験作成').put(12, 1, false);
   pressOk(env);
-  assert.equal(env.forms.form1.items.filter((i) => i.kind !== 'SECTION' && i.title !== '氏名（Name）').length, 1);
+  assert.equal(env.forms.form1.items.filter((i) => i.kind !== 'SECTION' && i.title !== '氏名（Name）' && i.title !== RESULT).length, 1);
 });
 
 test('送信から採点・確定・フォームへの書き戻しまで通る', () => {
   const env = prepare();
   pressOk(env);
-  env.forms.form1.submit({ '氏名（Name）': '山田', '日本の首都は？': '東京都', '4PのPriceを選べ': 'Price' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': '山田', '日本の首都は？': '東京都', '4PのPriceを選べ': 'Price' });
   env.ctx.processGradingQueue();
 
   const results = env.ss.getSheetByName('Results');
@@ -237,7 +240,7 @@ test('送信から採点・確定・フォームへの書き戻しまで通る',
 test('もう一度処理しても、Queue・Results・書き戻しが増えない', () => {
   const env = prepare();
   pressOk(env);
-  env.forms.form1.submit({ '氏名（Name）': '山田', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': '山田', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
   env.ctx.processGradingQueue();
   env.ctx.processGradingQueue();
   assert.equal(env.ss.getSheetByName('Queue').getLastRow(), 2);
@@ -252,7 +255,7 @@ test('記述は書き戻されず、manual_score を入れて反映すると確�
   ]);
   pressOk(env);
   assert.equal(control(env, 'STATUS'), 'READY', control(env, 'MESSAGE'));
-  env.forms.form1.submit({ '氏名（Name）': '山田', '日本の首都は？': '東京', '理由を説明せよ': '回答' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': '山田', '日本の首都は？': '東京', '理由を説明せよ': '回答' });
   env.ctx.processGradingQueue();
   assert.equal(env.forms.form1.submitted.length, 0);
   assert.equal(env.ss.getSheetByName('Queue').cell(2, 5), 'REVIEW_REQUIRED');
@@ -336,7 +339,7 @@ test('フォームの先頭に必須の氏名欄が入り、1人1回に制限さ
 test('氏名は結果の回答者に入り、採点の対象にはならない', () => {
   const env = prepare();
   pressOk(env);
-  env.forms.form1.submit({ '氏名（Name）': 'Nguyen Van A', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': 'Nguyen Van A', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
   env.ctx.processGradingQueue();
   const results = env.ss.getSheetByName('Results');
   assert.equal(results.getLastRow(), 3); // 氏名は行にならない
@@ -347,7 +350,7 @@ test('氏名は結果の回答者に入り、採点の対象にはならない',
 test('別の言語の短答は要確認になり、Claude が意味で確かめるまで書き戻さない', () => {
   const env = prepare();
   pressOk(env);
-  env.forms.form1.submit({ '氏名（Name）': 'Kim', '日本の首都は？': 'Tokyo', '4PのPriceを選べ': 'Price' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': 'Kim', '日本の首都は？': 'Tokyo', '4PのPriceを選べ': 'Price' });
   env.ctx.processGradingQueue();
   assert.equal(env.forms.form1.submitted.length, 0);
   assert.equal(env.ss.getSheetByName('Queue').cell(2, 5), 'REVIEW_REQUIRED');
@@ -388,31 +391,58 @@ test('説明の欄と配点0の記述があってもフォームができ、説�
   pressOk(env);
   assert.equal(control(env, 'STATUS'), 'READY');
   const ids = env.ss.getSheetByName('FormMapping').rows.slice(1).map((r) => r[2]);
-  assert.deepEqual(ids, ['__NAME__', 'Q001', 'Q003']);
+  assert.deepEqual(ids, ['__NAME__', 'Q001', 'Q003', '__RESULT__']);
 });
 
-test('問題の項目には配点も選択肢の正解も付かず、氏名欄に満点の配点が付く', () => {
+test('問題の項目にも氏名欄にも配点が付かず、最後の必須の採点結果の欄に満点の配点が付く', () => {
   const env = prepare();
   pressOk(env);
   const items = env.forms.form1.items;
-  const name = items.filter((i) => i.title === '氏名（Name）')[0];
-  assert.equal(name.points, 10);
-  items.filter((i) => i !== name).forEach((i) => assert.equal(i.points, 0, i.title));
+  const result = items[items.length - 1];
+  assert.deepEqual([result.title, result.kind, result.required, result.points], [RESULT, 'TEXT', true, 10]);
+  assert.equal(result.helpText, '返却のとき、ここに合計点と講評が表示されます');
+  items.filter((i) => i !== result).forEach((i) => assert.equal(i.points, 0, i.title));
   const choice = items.filter((i) => i.title === '4PのPriceを選べ')[0];
   assert.deepEqual([...choice.getChoices().map((c) => c.correct)], [false, false, false]);
+  const mapped = env.ss.getSheetByName('FormMapping').rows.slice(1).filter((r) => r[2] === '__RESULT__');
+  assert.deepEqual(mapped.map((r) => r[3]), [String(result.id)]);
 });
 
-test('書き戻しでは、氏名欄にだけ合計点と講評が入り、問題の項目には書かない', () => {
+test('書き戻しでは、採点結果の欄にだけ合計点と講評が入り、氏名欄と問題の項目には書かない', () => {
   const env = prepare();
   pressOk(env);
-  env.forms.form1.submit({ '氏名（Name）': '山田', '日本の首都は？': '大阪', '4PのPriceを選べ': 'Price' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': '山田', '日本の首都は？': '大阪', '4PのPriceを選べ': 'Price' });
+  env.ctx.processGradingQueue();
+  const grades = env.forms.form1.submitted[0][0].grades;
+  assert.equal(grades.length, 1);
+  assert.equal(grades[0].item.title, RESULT);
+  assert.equal(grades[0].score, 5);
+  assert.ok(grades[0].feedback.includes('日本の首都は？'), grades[0].feedback);
+  assert.ok(grades[0].feedback.includes('4PのPriceを選べ'), grades[0].feedback);
+  assert.ok(!grades[0].feedback.includes('採点結果'), grades[0].feedback);
+});
+
+test('採点結果の欄の答えは、Results の行にならない', () => {
+  const env = prepare();
+  pressOk(env);
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': '山田', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.ctx.processGradingQueue();
+  const ids = env.ss.getSheetByName('Results').rows.slice(1).map((r) => r[4]);
+  assert.deepEqual(ids.sort(), ['Q001', 'Q002']);
+});
+
+test('採点結果の欄が対応表に無い古い版のフォームでは、これまでどおり氏名欄に合計点と講評を書く', () => {
+  const env = prepare();
+  pressOk(env);
+  // この変更より前に作ったフォームの対応表には __RESULT__ が無い
+  const mapping = env.ss.getSheetByName('FormMapping');
+  mapping.rows = mapping.rows.filter((r) => r[2] !== '__RESULT__');
+  env.forms.form1.submit({ '氏名（Name）': '山田', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
   env.ctx.processGradingQueue();
   const grades = env.forms.form1.submitted[0][0].grades;
   assert.equal(grades.length, 1);
   assert.equal(grades[0].item.title, '氏名（Name）');
-  assert.equal(grades[0].score, 5);
-  assert.ok(grades[0].feedback.includes('日本の首都は？'), grades[0].feedback);
-  assert.ok(grades[0].feedback.includes('4PのPriceを選べ'), grades[0].feedback);
+  assert.equal(grades[0].score, 10);
 });
 
 test('「回答の概要を表示する」は、フォームの作成と同期のたびにオフになる', () => {
@@ -438,7 +468,7 @@ test('新しいフォーム・新しい版を作ったときだけ、成績の�
   env.ss.getSheetByName('試験作成').put(11, 2, '首都は？');
   pressOk(env); // 回答が無いので同じフォームのまま同期
   assert.ok(!String(control(env, 'MESSAGE')).includes(guide), control(env, 'MESSAGE'));
-  env.forms.form1.submit({ '氏名（Name）': '山田', '首都は？': '東京' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': '山田', '首都は？': '東京' });
   env.ss.getSheetByName('試験作成').put(11, 2, '日本の首都は？');
   pressOk(env); // 回答があるので新しい版
   assert.equal(control(env, 'FORM_VERSION'), 2);
@@ -459,7 +489,7 @@ function results(env) {
   });
 }
 
-/** n 回目の書き戻しで氏名欄に書いた点（偽のフォームは前回の点も持つので、最後のものを見る）。 */
+/** n 回目の書き戻しで採点結果の欄に書いた点（偽のフォームは前回の点も持つので、最後のものを見る）。 */
 function writtenScore(env, n) {
   return env.forms.form1.submitted[n][0].grades.slice(-1)[0].score;
 }
@@ -479,7 +509,7 @@ function lateSetup(opts) {
   a.put(4, 6, o.end);
   a.put(5, 6, LATER);
   pressOk(env);
-  env.forms.form1.submit({ '氏名（Name）': o.name, 'クラス（Class）': o.cls, '日本の首都は？': o.capital, '4PのPriceを選べ': 'Price' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': o.name, 'クラス（Class）': o.cls, '日本の首都は？': o.capital, '4PのPriceを選べ': 'Price' });
   env.ctx.processGradingQueue();
   return env;
 }
@@ -647,7 +677,7 @@ test('記述の採点を反映するときも上限を当てはめ、問題番�
   const a = env.ss.getSheetByName('試験作成');
   a.put(1, 6, 6); a.put(4, 6, ENDED);
   pressOk(env);
-  env.forms.form1.submit({ '氏名（Name）': '山田', 'クラス（Class）': '国際', '日本の首都は？': '東京', '理由を説明せよ': '回答' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': '山田', 'クラス（Class）': '国際', '日本の首都は？': '東京', '理由を説明せよ': '回答' });
   env.ctx.processGradingQueue();
   assert.equal(lateOf(env).length, 0); // まだ合計が上限を超えない
   const sheet = env.ss.getSheetByName('Results');
@@ -682,11 +712,11 @@ function markArchived(env) {
 test('保管の印があり待ち行列に未完了の仕事が無ければ、トリガーを外して TRIGGERS_REMOVED を書き、新しい回答は取り込まない', () => {
   const env = prepare();
   pressOk(env);
-  env.forms.form1.submit({ '氏名（Name）': '山田', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': '山田', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
   env.ctx.processGradingQueue();
   assert.equal(env.triggers.length, 2);
   markArchived(env);
-  env.forms.form1.submit({ '氏名（Name）': '佐藤', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': '佐藤', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
   env.ctx.processGradingQueue();
   assert.equal(env.triggers.length, 0);
   assert.equal(Object.prototype.toString.call(env.ctx.readSettings().TRIGGERS_REMOVED), '[object Date]');
@@ -698,8 +728,8 @@ test('保管の印があっても、待ち行列に未完了の仕事が残っ�
   const env = prepare();
   pressOk(env);
   env.ctx.setSetting('WORKER_BATCH_SIZE', 1);
-  env.forms.form1.submit({ '氏名（Name）': '山田', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
-  env.forms.form1.submit({ '氏名（Name）': '佐藤', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': '山田', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.forms.form1.submit({ [RESULT]: '確認', '氏名（Name）': '佐藤', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
   env.ctx.processGradingQueue();
   const queue = env.ss.getSheetByName('Queue');
   assert.deepEqual([queue.cell(2, 5), queue.cell(3, 5)], ['COMPLETED', 'PENDING']);

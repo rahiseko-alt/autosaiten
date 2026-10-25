@@ -6,8 +6,8 @@
 /** 授業外の提出で合計点を抑えた分の行の問題番号。最終点は負の数。 */
 var LATE_QUESTION_ID = '__LATE__';
 
-/** 内訳に出さない行（氏名欄・クラス欄）。Results には通常入らないが、念のため除く。 */
-var COMMENTARY_SKIP_IDS_ = { __NAME__: true, __CLASS__: true };
+/** 内訳に出さない行（氏名欄・クラス欄・採点結果の欄）。Results には通常入らないが、念のため除く。 */
+var COMMENTARY_SKIP_IDS_ = { __NAME__: true, __CLASS__: true, __RESULT__: true };
 
 function cmBlank_(v) {
   return v === undefined || v === null || String(v).trim() === '';

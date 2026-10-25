@@ -100,7 +100,8 @@ class FakeItem {
   constructor(form, kind, id) { this.form = form; this.kind = kind; this.id = id; this.points = 0; this.title = ''; this.choices = []; }
   getId() { return this.id; }
   setTitle(t) { this.title = t; return this; }
-  setRequired() { return this; }
+  setRequired(v) { this.required = v; return this; }
+  setHelpText(t) { this.helpText = t; return this; }
   setPoints(p) { if (!(p > 0)) throw new Error('フォームを更新するデータが無効です。'); this.points = p; return this; }
   setChoices(c) { this.choices = c; return this; }
   createChoice(value, correct) { return { value, correct, getValue() { return value; } }; }

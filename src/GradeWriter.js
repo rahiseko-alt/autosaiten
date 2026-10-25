@@ -81,20 +81,22 @@ function writeResultValues_(sheet, startRow, valueRows) {
 
 /**
  * 確定した回答の合計点と講評をフォームへ書き戻す。確定していない回答では呼ばない（ADR 0003）。
- * 問題の項目には書かず、氏名欄にだけ合計点と講評を書く（ADR 0013）。
+ * 問題の項目には書かず、最後の採点結果の欄にだけ合計点と講評を書く（ADR 0013）。
+ * その版の対応表に採点結果の欄が無い（採点結果の欄ができる前に作った）フォームでは、これまでどおり氏名欄に書く。
  * フォームの送信イベントは使っていないので、書き戻しで新しい job は作られない（ADR 0005）。
  */
 function writeBackScores(formId, responseId, rows) {
   var form = FormApp.openById(formId);
   var formResponse = form.getResponse(responseId);
-  var nameItemId = null;
+  var itemIdOf = {};
   readTable(SHEET_NAMES.FORM_MAPPING).forEach(function (m) {
-    if (m.form_id === formId && m.question_id === NAME_QUESTION_ID) nameItemId = Number(m.form_item_id);
+    if (m.form_id === formId) itemIdOf[m.question_id] = Number(m.form_item_id);
   });
-  var itemResponse = nameItemId === null ? null : formResponse.getGradableResponseForItem(form.getItemById(nameItemId));
+  var targetId = itemIdOf[RESULT_QUESTION_ID] !== undefined ? itemIdOf[RESULT_QUESTION_ID] : itemIdOf[NAME_QUESTION_ID];
+  var itemResponse = targetId === undefined ? null : formResponse.getGradableResponseForItem(form.getItemById(targetId));
   if (!itemResponse) {
-    // 氏名欄は必須なので通常は起きない。点を書き込む先が無いので、記録だけ残す
-    writeLog('WARN', 'GRADE_NOT_SUBMITTED', responseId, '氏名欄が見つからないため、フォームへ点数を反映できませんでした');
+    // 採点結果の欄（古い版では氏名欄）は必須なので通常は起きない。点を書き込む先が無いので、記録だけ残す
+    writeLog('WARN', 'GRADE_NOT_SUBMITTED', responseId, '採点結果の欄が見つからないため、フォームへ点数を反映できませんでした');
     return;
   }
   var total = totalScore(rows);

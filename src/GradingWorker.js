@@ -181,6 +181,8 @@ function gradeJob_(job, settings, deps) {
   var respondentClass = answers[CLASS_QUESTION_ID] || '';
   delete answers[NAME_QUESTION_ID];
   delete answers[CLASS_QUESTION_ID];
+  // 採点結果の欄は合計点と講評の受け皿なので、採点しない（ADR 0013）
+  delete answers[RESULT_QUESTION_ID];
   var mappedIds = {};
   Object.keys(questionOfItem).forEach(function (k) { mappedIds[questionOfItem[k]] = true; });
   // その版のフォームに載っていた問題は、今は掲載を外していても採点する

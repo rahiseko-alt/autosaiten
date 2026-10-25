@@ -22,10 +22,11 @@ test('問題文が複数行なら、最初の行だけを見出しに使う', ()
   assert.equal(text, '資料を読め。：5 / 5点');
 });
 
-test('氏名欄・クラス欄・加点なしの欄は、内訳に出さない', () => {
+test('氏名欄・クラス欄・採点結果の欄・加点なしの欄は、内訳に出さない', () => {
   const text = buildCommentary([
     row({ question_id: '__NAME__', question_text_snapshot: '氏名（Name）' }),
     row({ question_id: '__CLASS__', question_text_snapshot: 'クラス（Class）' }),
+    row({ question_id: '__RESULT__', question_text_snapshot: '採点結果（ここに「確認」と入力してください）' }),
     row({ question_id: 'Q003', question_text_snapshot: 'タグの名前', final_score: 0, max_score: 0, status: 'NO_POINTS', grading_reason: '加点なしの欄' }),
     row()
   ]);

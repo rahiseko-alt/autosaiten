@@ -106,7 +106,7 @@ test('クラスの一覧が無ければクラス欄は付かず、定義の指�
   assert.equal(definitionHash([q()], settings, []), definitionHash([q()], settings));
 });
 
-test('氏名欄の配点は満点（掲載した問題の配点の合計）になる', () => {
+test('氏名欄には配点が付かず、最後の採点結果の欄の配点が満点（掲載した問題の配点の合計）になる', () => {
   const spec = buildFormSpec([
     q(),
     q({ question_id: 'Q2', points: 10 }),
@@ -114,9 +114,14 @@ test('氏名欄の配点は満点（掲載した問題の配点の合計）に�
     q({ question_id: 'Q4', question_type: 'INFO', grading_mode: 'NONE', points: '' }),
     q({ question_id: 'Q5', question_type: 'PARAGRAPH', grading_mode: 'MANUAL', points: 0 })
   ], settings);
-  assert.equal(spec.nameItem.points, 15);
+  assert.equal(spec.nameItem.points, 0);
+  assert.deepEqual(spec.resultItem, {
+    title: '採点結果（ここに「確認」と入力してください）',
+    help_text: '返却のとき、ここに合計点と講評が表示されます',
+    required: true, points: 15
+  });
 });
 
-test('配点を変えると、定義の指紋も変わる（氏名欄の満点を直すため）', () => {
+test('配点を変えると、定義の指紋も変わる（採点結果の欄の満点を直すため）', () => {
   assert.notEqual(definitionHash([q()], settings), definitionHash([q({ points: 6 })], settings));
 });

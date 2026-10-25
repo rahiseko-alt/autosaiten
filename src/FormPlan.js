@@ -50,7 +50,7 @@ function buildFormSpec(questions, settings, classes) {
       feedback_incorrect: String(q.feedback_incorrect || '')
     };
   });
-  // 問題の項目には点数を付けず、氏名欄の配点を満点にする（フォームには合計点だけを出す。ADR 0013）
+  // 問題の項目と氏名欄には点数を付けず、最後の採点結果の欄の配点を満点にする（フォームには合計点だけを出す。ADR 0013）
   var total = questions.filter(fpEnabled_).reduce(function (sum, q) {
     return sum + (q.question_type === 'INFO' ? 0 : (Number(q.points) || 0));
   }, 0);
@@ -60,8 +60,13 @@ function buildFormSpec(questions, settings, classes) {
     collectEmail: settings.COLLECT_EMAIL === true || String(settings.COLLECT_EMAIL).toUpperCase() === 'TRUE',
     // 既定は1人1回。Settings で FALSE にしたときだけ外す
     limitOneResponse: !(settings.LIMIT_ONE_RESPONSE === false || String(settings.LIMIT_ONE_RESPONSE).toUpperCase() === 'FALSE'),
-    nameItem: { title: '氏名（Name）', required: true, points: total },
-    items: items
+    nameItem: { title: '氏名（Name）', required: true, points: 0 },
+    items: items,
+    // 回答の無い項目には点を書き込めないので必須にする
+    resultItem: {
+      title: '採点結果（ここに「確認」と入力してください）', help_text: '返却のとき、ここに合計点と講評が表示されます',
+      required: true, points: total
+    }
   };
   // クラス欄が無いときは項目ごと入れない（定義の指紋を、クラス欄ができる前と同じに保つ）
   if (classes && classes.length > 0) spec.classItem = { title: 'クラス（Class）', required: true, choices: classes.slice() };
