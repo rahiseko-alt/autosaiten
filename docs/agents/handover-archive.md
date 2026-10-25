@@ -4,6 +4,23 @@ handover.md の保存上限（5 件）を超えて押し出された古いメモ
 会話開始時には読み込まれない。過去の経緯を掘り返すときだけ開く。新しいものを一番上に来るよう足す。
 
 ---
+## 2026-10-21 練習の受付ページを Google に公開した
+
+**決めたこと**
+
+- 練習のプロジェクト https://script.google.com/d/1rwHcwXApq6m4zbxLqGsIS4_xhbohdKEyJIT8HF7Vb_qi6sG1OMdbahEX/edit 、デプロイ ID `AKfycbzrCATt9LViMNV_Kxl0wCDGsD3dYTY7IGsF8NYu-AgGD7dCfuDJLADOjYeQQCw4Z-8x`（更新は `clasp deploy -i` にこの ID）。学生に配る練習のURL: https://script.google.com/macros/s/AKfycbzrCATt9LViMNV_Kxl0wCDGsD3dYTY7IGsF8NYu-AgGD7dCfuDJLADOjYeQQCw4Z-8x/exec
+- 利用者のパソコンでは `C:\Users\user\autosaiten-practice\autosaiten-main\practice` に置いた（`.clasp.json` はここにある）。本番のスプレッドシートは「AI Grader」
+- `clasp push` の案内は、ZIP の直リンクと PowerShell の1行にし、実際に貼った1行は引き継ぎメモに残す
+
+**次にやること**
+
+- 先生が練習プロジェクトのエディタで `setupPracticeForm` を1回実行し、権限を許可する（練習フォームができる）。これを済ませるまで学生に配らない
+- `practice/README.md` の動作確認の一覧を確かめてから学生に配る
+
+**未解決の問題**
+
+- 練習の Google 上での動作は未確認
+
 ## 2026-10-21 練習の受付ページとフォームを取り込んだ（PR #38）
 
 **決めたこと**
