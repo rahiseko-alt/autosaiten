@@ -150,7 +150,8 @@ class FakeForm {
   submit(answersByTitle) { const r = new FakeResponse(this, 'resp' + (this.responses.length + 1), answersByTitle); this.responses.push(r); return r; }
 }
 FakeForm.prototype.setLimitOneResponsePerUser = function (v) { this.limitOne = v; return this; };
-['setTitle', 'setDescription', 'setIsQuiz', 'setCollectEmail', 'setAllowResponseEdits', 'setDestination'].forEach((m) => {
+FakeForm.prototype.setCollectEmail = function (v) { this.collectEmail = v; return this; };
+['setTitle', 'setDescription', 'setIsQuiz', 'setAllowResponseEdits', 'setDestination'].forEach((m) => {
   FakeForm.prototype[m] = function () { return this; };
 });
 
