@@ -500,3 +500,13 @@ test('チェック欄の印なし（FALSE）だけの行は空とみなし、書
   assert.equal(isBlankRow(['', '', '', '', true, false]), false);
   assert.equal(isBlankRow([0]), false);
 });
+
+test('回答のクラスが空（氏名を名簿から選ぶフォーム）でも取り込め、学生に結びつく（ADR 0014）', () => {
+  const noClass = Object.assign({}, taro, { respondent_class: '' });
+  const out = importOnce([], done('r1'), [row('r1', 'Q001', 5, noClass), row('r1', 'Q002', 3, noClass)]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].合計点, 8);
+  assert.equal(out[0].状態, '確定');
+  assert.equal(out[0].学生番号, 'S001');
+  assert.equal(out[0].回答のクラス, '');
+});

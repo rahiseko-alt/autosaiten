@@ -125,3 +125,85 @@ test('氏名欄には配点が付かず、最後の採点結果の欄の配点�
 test('配点を変えると、定義の指紋も変わる（採点結果の欄の満点を直すため）', () => {
   assert.notEqual(definitionHash([q()], settings), definitionHash([q({ points: 6 })], settings));
 });
+
+const { rosterNameChoices, findDuplicateNames, sameChoices } = require('../src/FormPlan.js');
+const { planLateRow } = require('../src/LateCap.js');
+const { fpNameKey_ } = require('../src/FormPlan.js');
+
+const rosterRows = [
+  { クラス: '国際', 氏名: '山田 太郎' }, { クラス: '国際', 氏名: ' Kim  ' },
+  { クラス: '総合', 氏名: '' }, { クラス: '総合', 氏名: '佐藤 花子' }
+];
+
+test('氏名の選択肢: 名簿の順、前後の空白を除き、空の行は捨てる', () => {
+  assert.deepEqual(rosterNameChoices(rosterRows), ['山田 太郎', 'Kim', '佐藤 花子']);
+  assert.deepEqual(rosterNameChoices([]), []);
+  assert.deepEqual(rosterNameChoices(undefined), []);
+});
+
+test('同姓同名の検出: 全角半角・大文字小文字・空白の違いを同じとみなす', () => {
+  const dup = findDuplicateNames([
+    { 氏名: '山田 太郎' }, { 氏名: '山田　太郎' }, { 氏名: 'kim' }, { 氏名: 'KIM' }, { 氏名: '佐藤 花子' }, { 氏名: '' }, { 氏名: '' }
+  ]);
+  assert.deepEqual(dup, ['山田 太郎', 'kim']);
+  assert.deepEqual(findDuplicateNames(rosterRows), []);
+});
+
+test('比べ方は LateCap の氏名の比べ方と同じ結果になる', () => {
+  const roster = [{ クラス: '国際', 氏名: 'ＫＩＭ  Lee' }];
+  const base = {
+    response_id: 'r', form_version: 1, submitted_at: new Date('2026-10-20T11:00:00Z'), respondent_email: '',
+    question_id: 'Q001', question_text_snapshot: '', final_score: 9, max_score: 10, status: 'AUTO_GRADED',
+    manual_score: '', respondent_name: 'kim lee', respondent_class: ''
+  };
+  const late = planLateRow({
+    rows: [base], cap: 4, classEnds: { 国際: new Date('2026-10-20T10:30:00Z') }, roster, now: new Date()
+  });
+  assert.equal(late.final_score, -5);
+  assert.deepEqual(findDuplicateNames([{ 氏名: 'ＫＩＭ  Lee' }, { 氏名: 'kim lee' }]), ['ＫＩＭ  Lee']);
+});
+
+test('選択肢が同じかの判定: 順序まで同じなら同じ', () => {
+  assert.equal(sameChoices(['a', 'b'], ['a', 'b']), true);
+  assert.equal(sameChoices(['a', 'b'], ['b', 'a']), false);
+  assert.equal(sameChoices(['a'], ['a', 'b']), false);
+  assert.equal(sameChoices([], []), true);
+});
+
+test('名簿が空のときの氏名欄と指紋は、従来と同じ（手入力のまま）', () => {
+  const qs = [q()];
+  const legacy = buildFormSpec(qs, settings);
+  assert.deepEqual(buildFormSpec(qs, settings, undefined, []), legacy);
+  assert.deepEqual(legacy.nameItem, { title: '氏名（Name）', required: true, points: 0 });
+  assert.equal(definitionHash(qs, settings, undefined, []), definitionHash(qs, settings));
+  assert.equal(definitionHash(qs, settings, ['国際'], []), definitionHash(qs, settings, ['国際']));
+});
+
+test('名簿に氏名があれば、氏名欄がプルダウンになりクラス欄は作らない', () => {
+  const spec = buildFormSpec([q()], settings, ['国際', '総合'], ['山田 太郎', 'Kim']);
+  assert.equal(spec.nameItem.kind, 'DROPDOWN');
+  assert.deepEqual(spec.nameItem.choices, ['山田 太郎', 'Kim']);
+  assert.equal(spec.nameItem.required, true);
+  assert.equal(spec.nameItem.points, 0);
+  assert.equal(spec.classItem, undefined);
+});
+
+test('指紋: 名簿の中身が変わっても変わらず、プルダウンかどうかでは変わる', () => {
+  const qs = [q()];
+  const a = definitionHash(qs, settings, ['国際'], ['山田 太郎', 'Kim']);
+  assert.equal(a, definitionHash(qs, settings, ['国際', '総合'], ['山田 太郎', 'Kim', '佐藤 花子']));
+  assert.notEqual(a, definitionHash(qs, settings, ['国際']));
+});
+
+test('氏名の比べ方: FormPlan と LateCap と集計表で、同じ氏名の表の結果が一致する', () => {
+  const samples = ['山田 太郎', '山田\u3000太郎', ' 山田  太郎 ', 'ＫＩＭ  Lee', 'kim lee', 'KIM\tLEE', 'Ｓａｔｏ', 'sato', '', '   ', 'Ünal'];
+  const groups = samples.map((v) => fpNameKey_(v));
+  // 同じ氏名とみなすものが、LateCap の氏名の比べ方で名簿を引けるかと一致する
+  samples.forEach((a, i) => samples.forEach((b, j) => {
+    const roster = [{ クラス: '国際', 氏名: a }];
+    const row = { response_id: 'r', form_version: 1, submitted_at: new Date('2026-10-20T11:00:00Z'), respondent_email: '', question_id: 'Q', question_text_snapshot: '', final_score: 9, max_score: 10, status: 'AUTO_GRADED', manual_score: '', respondent_name: b, respondent_class: '' };
+    const late = planLateRow({ rows: [row], cap: 4, classEnds: { 国際: new Date('2026-10-20T10:30:00Z') }, roster, now: new Date() });
+    const found = late && late.status === 'AUTO_GRADED';
+    assert.equal(found, groups[i] !== '' && groups[i] === groups[j], JSON.stringify([a, b]));
+  }));
+});

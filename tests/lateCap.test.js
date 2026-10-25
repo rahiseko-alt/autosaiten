@@ -113,3 +113,38 @@ test('__LATE__ の manual_score は、-(__LATE__ を除く合計点) 以上 0 �
   assert.equal(validLateManualScore('abc', 10), false);
   assert.equal(validLateManualScore('', 10), false);
 });
+
+// 氏名を名簿から選ぶフォームでは、回答のクラスが空になる（ADR 0014）。名簿のクラスだけで判定する。
+test('クラスが空の回答: 名簿で氏名からクラスを引き、授業外なら上限を当てる', () => {
+  const late = plan({ rows: [row({ respondent_class: '' }), row({ respondent_class: '', question_id: 'Q002', final_score: 4 })] });
+  assert.equal(late.final_score, -4);
+  assert.equal(late.status, 'AUTO_GRADED');
+});
+
+test('クラスが空の回答: 授業内なら行を作らない', () => {
+  assert.equal(plan({ rows: [row({ respondent_class: '', submitted_at: BEFORE, final_score: 10 })] }), null);
+});
+
+test('クラスが空の回答: 名簿で氏名が見つからなければ要確認', () => {
+  const late = plan({ rows: [row({ respondent_class: '', respondent_name: '知らない人', final_score: 10 })] });
+  assert.equal(late.status, 'REVIEW_REQUIRED');
+  assert.match(late.grading_reason, /名簿で氏名「知らない人」のクラスが決められません/);
+});
+
+test('クラスが空の回答: 同じ氏名が別々のクラスにいれば要確認', () => {
+  const dup = [{ クラス: '国際', 氏名: '山田 太郎' }, { クラス: '総合', 氏名: '山田 太郎' }];
+  const late = plan({ roster: dup, rows: [row({ respondent_class: '', final_score: 10 })] });
+  assert.equal(late.status, 'REVIEW_REQUIRED');
+});
+
+test('名簿のクラスが空の行は、クラスを引けたことにせず要確認（崩れた理由文を出さない）', () => {
+  const late = plan({ roster: [{ クラス: '', 氏名: '山田 太郎' }], rows: [row({ respondent_class: '', final_score: 10 })] });
+  assert.equal(late.status, 'REVIEW_REQUIRED');
+  assert.match(late.grading_reason, /クラスが決められません/);
+});
+
+test('クラスが入った回答で名簿と違うときの要確認は従来どおり', () => {
+  const late = plan({ rows: [row({ respondent_class: '総合', final_score: 10 })] });
+  assert.equal(late.status, 'REVIEW_REQUIRED');
+  assert.match(late.grading_reason, /選んだクラス（総合）と名簿のクラス（国際）が違います/);
+});

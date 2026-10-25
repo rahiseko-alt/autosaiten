@@ -184,9 +184,9 @@ function putRoster(env, rows) {
   rows.forEach((row, i) => row.forEach((v, c) => sheet.put(2 + i, c + 1, v)));
 }
 
-test('「これでOK」を押し直すと、手で消えたクラスの選択肢が名簿から戻る（回答済みでも新しい版は作らない）', () => {
+test('「これでOK」を押し直すと、手で消えたクラスの選択肢が名簿から戻る（氏名が空でクラスだけの名簿＝従来の形。回答済みでも新しい版は作らない）', () => {
   const env = prepare();
-  putRoster(env, [['国際', 1, 'A', ''], ['総合', 1, 'B', '']]);
+  putRoster(env, [['国際', 1, '', ''], ['総合', 1, '', '']]);
   pressOk(env);
   const form = env.forms.form1;
   const classItem = form.items.filter((i) => i.title.indexOf('クラス') === 0)[0];
@@ -197,6 +197,109 @@ test('「これでOK」を押し直すと、手で消えたクラスの選択肢
   assert.equal(classItem.getChoices().map((c) => c.getValue()).join(','), '国際,総合');
   assert.equal(Object.keys(env.forms).length, 1);
   assert.equal(control(env, 'FORM_VERSION'), 1);
+});
+
+function nameItemOf(form) { return form.items.filter((i) => i.title.indexOf('氏名') === 0)[0]; }
+function choiceValues(item) { return item.getChoices().map((c) => c.getValue()).join(','); }
+
+test('名簿に氏名があれば、氏名欄は名簿から選ぶプルダウンになり、クラス欄は作らない（ADR 0014）', () => {
+  const env = prepare();
+  putRoster(env, [['国際', 1, '山田 太郎', ''], ['総合', 2, 'Kim', '']]);
+  pressOk(env);
+  assert.equal(control(env, 'STATUS'), 'READY', control(env, 'MESSAGE'));
+  const form = env.forms.form1;
+  assert.equal(nameItemOf(form).kind, 'DROPDOWN');
+  assert.equal(choiceValues(nameItemOf(form)), '山田 太郎,Kim');
+  assert.equal(form.items.filter((i) => i.title.indexOf('クラス') === 0).length, 0);
+});
+
+test('名簿が空なら、氏名欄は今までどおり手入力', () => {
+  const env = prepare();
+  pressOk(env);
+  assert.equal(nameItemOf(env.forms.form1).kind, 'TEXT');
+});
+
+test('名簿に学生を足して「これでOK」を押し直すと、回答があっても新しい版を作らずに選択肢が増える', () => {
+  const env = prepare();
+  putRoster(env, [['国際', 1, 'A', ''], ['総合', 2, 'B', '']]);
+  pressOk(env);
+  const form = env.forms.form1;
+  form.submit({ '日本の首都は？': '東京' });
+  putRoster(env, [['国際', 1, 'A', ''], ['総合', 2, 'B', ''], ['総合', 3, 'C', '']]);
+  pressOk(env);
+  assert.equal(control(env, 'STATUS'), 'READY', control(env, 'MESSAGE'));
+  assert.equal(choiceValues(nameItemOf(form)), 'A,B,C');
+  assert.equal(Object.keys(env.forms).length, 1);
+  assert.equal(control(env, 'FORM_VERSION'), 1);
+  assert.equal(form.responses.length, 1);
+});
+
+test('手で選択肢が欠けても、「これでOK」を押し直すと名簿から戻る', () => {
+  const env = prepare();
+  putRoster(env, [['国際', 1, 'A', ''], ['総合', 2, 'B', '']]);
+  pressOk(env);
+  const item = nameItemOf(env.forms.form1);
+  item.setChoices([item.createChoice('B')]);
+  pressOk(env);
+  assert.equal(choiceValues(item), 'A,B');
+});
+
+test('名簿が変わらなければ、押し直しても選択肢の同期のログは出ない', () => {
+  const env = prepare();
+  putRoster(env, [['国際', 1, 'A', ''], ['総合', 2, 'B', '']]);
+  pressOk(env);
+  pressOk(env);
+  const logs = env.ss.getSheetByName('Logs').rows.map((r) => r[2]);
+  assert.equal(logs.includes('FORM_NAME_CHOICES_SYNCED'), false);
+});
+
+test('名簿に同姓同名がいれば、問題を書き換える前に止まり、直し方を伝える', () => {
+  const env = prepare();
+  putRoster(env, [['国際', 1, '山田 太郎', ''], ['総合', 2, '山田\u3000太郎', '']]);
+  pressOk(env);
+  assert.equal(control(env, 'STATUS'), 'ERROR');
+  assert.ok(String(control(env, 'MESSAGE')).includes('名簿に同じ氏名の人がいます（「山田 太郎」）'), control(env, 'MESSAGE'));
+  assert.ok(String(control(env, 'MESSAGE')).includes('（2）'));
+  assert.equal(Object.keys(env.forms).length, 0);
+  assert.equal(env.ss.getSheetByName('Questions').getLastRow(), 1);
+});
+
+test('名簿が空から埋まると氏名欄の形が変わるので、回答があれば新しい版を作り、案内を出す', () => {
+  const env = prepare();
+  pressOk(env);
+  env.forms.form1.submit({ '日本の首都は？': '東京' });
+  putRoster(env, [['国際', 1, 'A', ''], ['総合', 2, 'B', '']]);
+  pressOk(env);
+  assert.equal(control(env, 'FORM_VERSION'), 2);
+  assert.equal(nameItemOf(env.forms.form2).kind, 'DROPDOWN');
+  assert.ok(String(control(env, 'MESSAGE')).includes('氏名欄の形'), control(env, 'MESSAGE'));
+});
+
+test('従来のクラス欄があるフォームでは、選んだクラスと名簿のクラスが違う授業外の提出は、今までどおり要確認になる', () => {
+  const env = prepare();
+  putRoster(env, [['国際', 1, '', ''], ['総合', 2, '', '']]); // 氏名が空なので、クラス欄のあるフォームになる
+  pressOk(env);
+  const a = env.ss.getSheetByName('試験作成');
+  a.put(1, 6, 6); a.put(4, 6, ENDED); a.put(5, 6, LATER);
+  pressOk(env);
+  assert.equal(env.forms.form1.items.filter((i) => i.title.indexOf('クラス') === 0).length, 1);
+  putRoster(env, [['国際', 1, '山田', ''], ['総合', 2, 'Kim', '']]); // 押し直さないので、フォームはクラス欄のまま
+  env.forms.form1.submit({ [RESULT]: '確認しました', '氏名（Name）': '山田', 'クラス（Class）': '総合', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.ctx.processGradingQueue();
+  assert.equal(lateOf(env)[0].status, 'REVIEW_REQUIRED');
+  assert.equal(env.forms.form1.submitted.length, 0);
+});
+
+test('氏名欄の形の記録が無い（この仕組みの前に作った）フォームでも、形が変わったときの案内が出る', () => {
+  const env = prepare();
+  pressOk(env);
+  env.props.document.NAME_MODE = undefined;
+  delete env.props.document.NAME_MODE;
+  env.forms.form1.submit({ '日本の首都は？': '東京' });
+  putRoster(env, [['国際', 1, 'A', ''], ['総合', 2, 'B', '']]);
+  pressOk(env);
+  assert.equal(control(env, 'FORM_VERSION'), 2);
+  assert.ok(String(control(env, 'MESSAGE')).includes('氏名欄の形'), control(env, 'MESSAGE'));
 });
 
 test('システム診断は、フォームに届いているのに待ち行列に登録されていない回答を知らせる', () => {
@@ -662,10 +765,11 @@ test('名簿に無い氏名の授業外の提出は要確認になり、manual_s
   assert.equal(env.forms.form1.submitted[0][0].grades[0].score, 6);
 });
 
-test('選んだクラスと名簿のクラスが違う授業外の提出は要確認になる', () => {
+test('氏名を名簿から選ぶフォームにはクラス欄が無く、授業外の判定は名簿のクラスで行う（ADR 0014）', () => {
   const env = lateSetup({ cls: '総合' });
-  assert.equal(lateOf(env)[0].status, 'REVIEW_REQUIRED');
-  assert.equal(env.forms.form1.submitted.length, 0);
+  assert.equal(env.forms.form1.items.filter((i) => i.title.indexOf('クラス') === 0).length, 0);
+  const late = lateOf(env);
+  assert.deepEqual([late.length, late[0].status, late[0].final_score], [1, 'AUTO_GRADED', -4]);
 });
 
 test('記述の採点を反映するときも上限を当てはめ、問題番号で新旧を比べる', () => {
