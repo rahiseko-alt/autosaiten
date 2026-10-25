@@ -34,6 +34,16 @@ function gbText_(v) {
   return v === undefined || v === null ? '' : String(v).trim();
 }
 
+/**
+ * シートの1行が空か。チェック欄の印なし（false・'FALSE'）だけの行も空とみなす
+ * （チェック欄の入力規則を下の行まで付けると、何も書いていない行にも FALSE が入るため）。
+ */
+function isBlankRow(row) {
+  return (row || []).every(function (v) {
+    return v === '' || v === null || v === undefined || v === false || gbText_(v).toUpperCase() === 'FALSE';
+  });
+}
+
 function gbTrue_(v) {
   return v === true || gbText_(v).toUpperCase() === 'TRUE';
 }
@@ -502,7 +512,7 @@ function folderIdFromUrl(v) {
 if (typeof module !== 'undefined') {
   module.exports = {
     GB_SHEETS: GB_SHEETS, GB_SETTINGS: GB_SETTINGS, GB_GRADES_NOTICE: GB_GRADES_NOTICE, GB_TEST_ROSTER_HEADERS: GB_TEST_ROSTER_HEADERS,
-    matchStudent: matchStudent, planImport: planImport, reviewRows: reviewRows, applyReviewDecisions: applyReviewDecisions,
+    isBlankRow: isBlankRow, matchStudent: matchStudent, planImport: planImport, reviewRows: reviewRows, applyReviewDecisions: applyReviewDecisions,
     buildGradeTable: buildGradeTable, assignStudentIds: assignStudentIds, spreadsheetIdFromUrl: spreadsheetIdFromUrl,
     planAliasAdditions: planAliasAdditions, rosterForTest: rosterForTest, templateProblems: templateProblems,
     newTestName: newTestName, GB_ARCHIVE: GB_ARCHIVE, archiveFormIds: archiveFormIds, archiveBlockers: archiveBlockers,

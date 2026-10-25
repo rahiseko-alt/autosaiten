@@ -490,3 +490,13 @@ test('移す段で1つでも閉じられない・移せないファイルがあ�
   assert.equal(ok.archived, true);
   assert.equal(ok.message, step.message);
 });
+
+test('チェック欄の印なし（FALSE）だけの行は空とみなし、書き込みのある行は空とみなさない', () => {
+  const { isBlankRow } = require('../gradebook/Gradebook.js');
+  assert.equal(isBlankRow(['', '', '', '', false, false, '', '', '']), true);
+  assert.equal(isBlankRow(['', '', '', '', 'FALSE', 'FALSE']), true);
+  assert.equal(isBlankRow([]), true);
+  assert.equal(isBlankRow(['試し', '', '', '', false, false]), false);
+  assert.equal(isBlankRow(['', '', '', '', true, false]), false);
+  assert.equal(isBlankRow([0]), false);
+});

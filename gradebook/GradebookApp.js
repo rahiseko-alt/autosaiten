@@ -82,7 +82,10 @@ function createNewTest() {
     var list = gbReadTable_('テスト一覧');
     var row = { テスト名: test.テスト名, 科目: test.科目, 実施日: test.実施日, スプレッドシートのURL: copy.getUrl(),
       受付ページを使う: false, 実施中: false, スプレッドシートのID: copy.getId() };
-    list.sheet.appendRow(list.headers.map(function (h) { return row[h] === undefined ? '' : row[h]; }));
+    // appendRow はチェック欄の FALSE が入った行の後ろに足してしまうので、書き込みのある最後の行の次に書く
+    var next = list.rowNumbers.length > 0 ? list.rowNumbers[list.rowNumbers.length - 1] + 1 : 2;
+    list.sheet.getRange(next, 1, 1, list.headers.length)
+      .setValues([list.headers.map(function (h) { return row[h] === undefined ? '' : row[h]; })]);
     message = '新しいテスト「' + newTestName(test) + '」を作りました。\n' +
       '新しいスプレッドシートを開き、メニュー AI Grader の初期セットアップを押してください。\n' + copy.getUrl();
   });
@@ -100,6 +103,14 @@ function gbWriteTestRoster_(ss, rows) {
   }
   if (sheet.getLastRow() > 1) sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
   if (rows.length > 0) sheet.getRange(2, 1, rows.length, width).setValues(rows);
+  // 写せたかを読み直して確かめる（写せていないまま先生が初期セットアップへ進まないように）
+  SpreadsheetApp.flush();
+  var written = sheet.getLastRow() - 1;
+  if (written !== rows.length) {
+    throw new Error('新しいテストの名簿に ' + rows.length + ' 人を写すはずが、' + Math.max(written, 0) +
+      ' 人しか写せませんでした。集計表の名簿に氏名と学生番号があるか確かめてください');
+  }
+  if (rows.length === 0) throw new Error('集計表の名簿に学生がいないので、新しいテストの名簿を写せませんでした');
 }
 
 /**
@@ -354,7 +365,7 @@ function gbReadTable_(name, ss) {
   var rows = [];
   var rowNumbers = [];
   values.slice(1).forEach(function (row, i) {
-    if (!row.some(function (v) { return v !== '' && v !== null; })) return;
+    if (isBlankRow(row)) return;
     var obj = {};
     headers.forEach(function (h, c) { if (h !== '') obj[h] = row[c]; });
     rows.push(obj);
