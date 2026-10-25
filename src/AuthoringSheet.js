@@ -165,17 +165,47 @@ function prepareAuthoring_() {
   if (converted.rows.length === 0) {
     errors.push('・試験作成シートの表に問題がありません。11行目から問題を書いてください。');
   }
-  var cap = sheet.getRange(AUTHORING_LATE.CAP_ROW, AUTHORING_LATE.VALUE_COL).getValue();
-  if (String(cap).trim() !== '' && !(isFinite(Number(cap)) && Number(cap) >= 0)) {
-    errors.push('・授業外の上限点は0以上の数で入れてください（抑えないなら空欄）。');
-  }
+  var late = readAuthoringLate_(sheet);
   return {
     questions: mergeWithExisting(converted.rows, existing),
-    late: { cap: cap, classes: arrangeLateClasses_(sheet) },
-    errors: errors,
+    late: late.late,
+    errors: errors.concat(late.errors),
     title: sheet.getRange(AUTHORING_CELLS.FORM_TITLE).getValue(),
     description: sheet.getRange(AUTHORING_CELLS.FORM_DESCRIPTION).getValue()
   };
+}
+
+/**
+ * 試験作成シートの授業外の上限点と、クラスごとの授業の終わる日時を読む。
+ * @return {{late: {cap: *, classes: {cls: string, end: *}[]}, errors: string[]}}
+ */
+function readAuthoringLate_(sheet) {
+  var cap = sheet.getRange(AUTHORING_LATE.CAP_ROW, AUTHORING_LATE.VALUE_COL).getValue();
+  var errors = [];
+  if (String(cap).trim() !== '' && !(isFinite(Number(cap)) && Number(cap) >= 0)) {
+    errors.push('・授業外の上限点は0以上の数で入れてください（抑えないなら空欄）。');
+  }
+  return { late: { cap: cap, classes: arrangeLateClasses_(sheet) }, errors: errors };
+}
+
+/** 授業外の上限を Settings に写す。フォームに出ないので、定義の指紋には入らず、フォームの作り直しも起きない。 */
+function writeLateSettings_(late) {
+  setSetting(LATE_CAP_KEY, late.cap);
+  late.classes.forEach(function (t) { setSetting(CLASS_END_KEY_PREFIX + t.cls, t.end); });
+}
+
+/**
+ * 試験作成シートの授業外の上限を、そのまま Settings に写す（「手動採点を反映」の最初に使う）。
+ * 「これでOK」を押さずに上限点や終わる日時を直しても、新しい値で決め直せるようにする。
+ * 呼び出し側が ScriptLock を持っていること。試験作成シートが無ければ何もしない。
+ * @return {string[]} 不備の理由。あれば Settings は書き換えない
+ */
+function syncLateSettingsFromAuthoring_() {
+  var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.AUTHORING);
+  if (!sheet) return [];
+  var read = readAuthoringLate_(sheet);
+  if (read.errors.length === 0) writeLateSettings_(read.late);
+  return read.errors;
 }
 
 /**
@@ -197,9 +227,7 @@ function commitAuthoring_(prepared) {
     if (values.length > 0) q.getRange(2, 1, values.length, headers.length).setValues(values);
     if (String(prepared.title).trim() !== '') setSetting('FORM_TITLE', prepared.title);
     setSetting('FORM_DESCRIPTION', prepared.description);
-    // 授業外の上限はフォームに出ないので、定義の指紋には入らず、フォームの作り直しも起きない
-    setSetting(LATE_CAP_KEY, prepared.late.cap);
-    prepared.late.classes.forEach(function (t) { setSetting(CLASS_END_KEY_PREFIX + t.cls, t.end); });
+    writeLateSettings_(prepared.late);
   } finally {
     lock.releaseLock();
   }

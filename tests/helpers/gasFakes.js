@@ -106,8 +106,8 @@ class FakeItem {
   createChoice(value, correct) { return { value, correct, getValue() { return value; } }; }
   getChoices() { return this.choices.slice(); }
   asMultipleChoiceItem() { return this; }
-  setFeedbackForCorrect() { return this; }
-  setFeedbackForIncorrect() { return this; }
+  setFeedbackForCorrect(f) { this.feedbackForCorrect = f; return this; }
+  setFeedbackForIncorrect(f) { this.feedbackForIncorrect = f; return this; }
 }
 
 class FakeResponse {

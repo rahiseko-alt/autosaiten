@@ -71,3 +71,12 @@ test('要確認の __LATE__ が残れば確定しない。0以下の manual_scor
   assert.equal(bad.finalized, false);
   assert.ok(bad.errors[0].includes('__LATE__'), bad.errors[0]);
 });
+
+test('__LATE__ の manual_score が -(__LATE__ を除く合計点) より小さければ、理由を返して無視する', () => {
+  const base = lateRow({ auto_score: 8, final_score: 8 });
+  const bad = recomputeResponses([base, lateRow({ question_id: '__LATE__', grading_mode: 'MANUAL', status: 'REVIEW_REQUIRED', auto_score: '', final_score: '', manual_score: -9, max_score: 0 })]).r1;
+  assert.equal(bad.finalized, false);
+  assert.ok(bad.errors[0].includes('-8'), bad.errors[0]);
+  const ok = recomputeResponses([base, lateRow({ question_id: '__LATE__', grading_mode: 'MANUAL', status: 'REVIEW_REQUIRED', auto_score: '', final_score: '', manual_score: -8, max_score: 0 })]).r1;
+  assert.deepEqual([ok.finalized, ok.errors.length], [true, 0]);
+});

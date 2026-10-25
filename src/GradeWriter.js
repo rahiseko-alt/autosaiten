@@ -107,7 +107,8 @@ function writeBackScores(formId, responseId, rows) {
 
 /**
  * 教師が入れた manual_score を反映する。確定した回答はフォームへ書き戻し、Queue を COMPLETED にする。
- * 授業外の上限（`__LATE__` の行）も毎回決め直す。上限点や終わる日時を直して押し直せば、合計点が直る。
+ * 授業外の上限（`__LATE__` の行）も毎回決め直す。上限点や終わる日時を試験作成シートで直して押し直せば、
+ * 「これでOK」を押さなくても合計点が直る（最初に Settings へ写す）。
  * 回答ごとに処理し、1件の失敗や入力ミスで残りを止めない。
  */
 function finalizeManualGrades() {
@@ -119,6 +120,14 @@ function finalizeManualGrades() {
   var done = 0;
   var problems = [];
   try {
+    // 試験作成シートで直した上限点や終わる日時を、「これでOK」を押さなくても使う
+    var lateErrors = syncLateSettingsFromAuthoring_();
+    if (lateErrors.length > 0) {
+      setControl('MESSAGE', lateErrors.join('\n'));
+      writeLog('WARN', 'FINALIZE_STOPPED', '', '授業外の上限の設定に不備があるため、手動採点を反映しませんでした');
+      SpreadsheetApp.getActive().toast('授業外の上限の設定に不備があります。メッセージ欄を確認してください', 'AI Grader', 8);
+      return;
+    }
     var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.RESULTS);
     var headers = SHEET_HEADERS.Results;
     var existing = readResultsWithRows_();
@@ -164,6 +173,7 @@ function finalizeManualGrades() {
         } else if (!item.finalized && job && job.job.status === 'COMPLETED') {
           // 上限の決め直しで要確認に戻ったら、集計表が確定とみなさないよう待ち行列も戻す
           updateJob_(job.rowIndex, { status: 'REVIEW_REQUIRED' });
+          writeLog('WARN', 'FINALIZED_REOPENED', responseId, 'この回答のフォームの点数は、確定し直すまで古いままです');
         }
       } catch (err) {
         problems.push(responseId + ': ' + String(err && err.message));

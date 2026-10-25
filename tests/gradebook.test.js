@@ -2,7 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   matchStudent, planImport, applyReviewDecisions, reviewRows, buildGradeTable, assignStudentIds, spreadsheetIdFromUrl,
-  planAliasAdditions, rosterForTest, templateProblems, newTestName, archiveStep, archiveBlockers, archiveFormIds
+  planAliasAdditions, rosterForTest, templateProblems, newTestName, archiveStep, archiveBlockers, archiveFormIds,
+  folderIdFromUrl, archiveFormReport
 } = require('../gradebook/Gradebook.js');
 
 const roster = [
@@ -150,7 +151,7 @@ const tests = [
 
 test('要確認の一覧には、理由のある取り込み記録だけを、テスト名つきで出す', () => {
   const recs = importOnce([], done('r1', 'r2'), [row('r1', 'Q001', 5, taro), row('r2', 'Q001', 7, stranger)]);
-  const rows = reviewRows(recs, tests);
+  const rows = reviewRows(recs, tests, roster);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].テスト, '第1回');
   assert.equal(rows[0].回答の番号, 'r2');
@@ -163,13 +164,31 @@ test('要確認の一覧には、理由のある取り込み記録だけを、�
 
 test('要確認シートの先生の判断を、同じテスト・回答の取り込み記録へ写す', () => {
   const recs = importOnce([], done('r1'), [row('r1', 'Q001', 5, stranger)]);
-  const sheet = reviewRows(recs, tests);
+  const sheet = reviewRows(recs, tests, roster);
   sheet[0].この学生にする = ' S002 ';
   const out = applyReviewDecisions(recs, sheet);
   assert.equal(out[0].この学生にする, 'S002');
   assert.equal(out[0].この回答を使う, false);
   // 写したあとで計画を立てれば、指定した学生に結びつく
   assert.equal(importOnce(out, done('r1'), [row('r1', 'Q001', 5, stranger)])[0].学生番号, 'S002');
+});
+
+test('要確認の一覧のおすすめの学生は、学生番号に氏名を並べて出す', () => {
+  const recs = importOnce([], done('r1'), [row('r1', 'Q001', 5, { respondent_email: 'taro@example.com', respondent_name: '佐藤 花子' })]);
+  const rows = reviewRows(recs, tests, roster);
+  assert.equal(rows[0].おすすめの学生, 'S001 山田 太郎');
+  // 取り込み記録のほうは学生番号のまま（成績の印に使う）
+  assert.equal(recs[0].おすすめの学生, 'S001');
+});
+
+test('名簿に無い学生番号を指定した回答は、黙って照合し直さず、要確認の理由にする', () => {
+  const first = importOnce([], done('r1'), [row('r1', 'Q001', 5, taro)]);
+  first[0].この学生にする = 'S999';
+  const out = importOnce(first, done('r1'), [row('r1', 'Q001', 5, taro)]);
+  assert.equal(out[0].学生番号, '');
+  assert.equal(out[0].理由, '指定した学生番号が名簿に無い');
+  assert.equal(out[0].この学生にする, 'S999');
+  assert.equal(reviewRows(out, tests, roster)[0].理由, '指定した学生番号が名簿に無い');
 });
 
 test('要確認シートに出ていない記録の判断は、そのまま残す', () => {
@@ -222,6 +241,16 @@ test('スプレッドシートの URL から ID を取り出す', () => {
   assert.equal(spreadsheetIdFromUrl(id), id);
   assert.equal(spreadsheetIdFromUrl('https://example.com/'), '');
   assert.equal(spreadsheetIdFromUrl(''), '');
+});
+
+test('フォルダの URL から ID を取り出す（ID そのものでもよい）', () => {
+  const id = '1AbCdEfGhIjKlMnOpQrStUvWxYz012345';
+  assert.equal(folderIdFromUrl('https://drive.google.com/drive/folders/' + id), id);
+  assert.equal(folderIdFromUrl('https://drive.google.com/drive/u/0/folders/' + id + '?usp=sharing'), id);
+  assert.equal(folderIdFromUrl('https://drive.google.com/open?id=' + id), id);
+  assert.equal(folderIdFromUrl(' ' + id + ' '), id);
+  assert.equal(folderIdFromUrl('https://example.com/'), '');
+  assert.equal(folderIdFromUrl(''), '');
 });
 
 // --- 照合の結果を名簿の別名に残す ---
@@ -325,6 +354,16 @@ test('停止待ちで理由が無く、TRIGGERS_REMOVED があれば、ファイ
   assert.equal(step.action, 'move');
 });
 
+test('Queue に行が無く FormMapping も空のテストは、TRIGGERS_REMOVED が無くても移す', () => {
+  const step = archiveStep({ status: '停止待ち', blockers: [], settings: [], queue: [], formMapping: [] });
+  assert.equal(step.action, 'move');
+});
+
+test('Queue か FormMapping に行があれば、TRIGGERS_REMOVED が無いうちは待つ', () => {
+  assert.equal(archiveStep({ status: '停止待ち', blockers: [], settings: [], queue: done('r1'), formMapping: [] }).action, 'wait');
+  assert.equal(archiveStep({ status: '停止待ち', blockers: [], settings: [], queue: [], formMapping: [{ form_id: 'f1' }] }).action, 'wait');
+});
+
 test('TRIGGERS_REMOVED があっても、止める理由があれば移さない', () => {
   const step = archiveStep({ status: '停止待ち', blockers: ['理由A'], settings: [{ key: 'TRIGGERS_REMOVED', value: true }] });
   assert.equal(step.action, 'blocked');
@@ -351,6 +390,7 @@ test('閉じるフォームは、FormMapping の form_id の重複を除いた�
 const archiveInput = (over) => Object.assign({
   testId: 'T1',
   queue: done('r1', 'r2'),
+  formResponseCount: 2,
   results: [row('r1', 'Q001', 5, taro), row('r1', '__LATE__', -1, taro), row('r2', 'Q001', 7, hanako)],
   records: [
     { テストのID: 'T1', 回答の番号: 'r1', 状態: '確定', 合計点: 4, 理由: '' },
@@ -412,4 +452,41 @@ test('待ち行列に採点を待つ仕事（PENDING・PROCESSING・RETRY）が�
   assert.equal(blockers.length, 2);
   assert.match(blockers[0], /採点が確定していない回答が3件/);
   assert.match(blockers[1], /待ち行列に採点を待つ回答が3件/);
+});
+
+test('採点に失敗した回答（FAILED）は別に数え、「選択回答を再採点」を案内する', () => {
+  const queue = done('r1').concat([{ response_id: 'r2', status: 'FAILED' }, { response_id: 'r3', status: 'REVIEW_REQUIRED' }]);
+  const blockers = archiveBlockers(archiveInput({ queue, formResponseCount: 3 }));
+  assert.equal(blockers.length, 2);
+  assert.match(blockers[0], /採点が確定していない回答が1件/);
+  assert.equal(blockers[1], '採点に失敗した回答が1件あります。テストの Results でその回答の行を選び、メニューの『選択回答を再採点』を押してください');
+});
+
+test('フォームの回答数が Queue の行数より多ければ、まだ取り込まれていない回答として止める', () => {
+  const blockers = archiveBlockers(archiveInput({ formResponseCount: 3 }));
+  assert.equal(blockers.length, 1);
+  assert.match(blockers[0], /フォームに、テストへまだ取り込まれていない回答が1件/);
+  assert.deepEqual(archiveBlockers(archiveInput({ formResponseCount: 2 })), []);
+});
+
+test('フォームの受付を閉じる段で開けないフォームがあれば、ID を並べて伝える（停止待ちにはする）', () => {
+  const step = archiveStep({ status: '', blockers: [], settings: [] });
+  const report = archiveFormReport({ step, closeFailed: ['f2', 'f3'], moveFailed: [] });
+  assert.equal(report.archived, false);
+  assert.match(report.message, /フォームを閉じました/);
+  assert.match(report.message, /受付を閉じられなかったフォーム: f2, f3/);
+});
+
+test('移す段で1つでも閉じられない・移せないファイルがあれば、保管済みにしない', () => {
+  const step = archiveStep({ status: '停止待ち', blockers: [], settings: [{ key: 'TRIGGERS_REMOVED', value: true }] });
+  const closeFail = archiveFormReport({ step, closeFailed: ['f2'], moveFailed: [] });
+  assert.equal(closeFail.archived, false);
+  assert.match(closeFail.message, /受付を閉じられなかったフォーム: f2/);
+  assert.doesNotMatch(closeFail.message, /保管しました/);
+  const moveFail = archiveFormReport({ step, closeFailed: [], moveFailed: ['f1'] });
+  assert.equal(moveFail.archived, false);
+  assert.match(moveFail.message, /保管用のフォルダへ移せなかったファイル: f1/);
+  const ok = archiveFormReport({ step, closeFailed: [], moveFailed: [] });
+  assert.equal(ok.archived, true);
+  assert.equal(ok.message, step.message);
 });

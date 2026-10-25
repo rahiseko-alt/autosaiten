@@ -32,15 +32,28 @@ test('氏名欄・クラス欄・加点なしの欄は、内訳に出さない',
   assert.equal(text, '日本の首都は？：5 / 5点');
 });
 
-test('授業外の提出で抑えた行は内訳に出さず、最後に上限の点を書き添える', () => {
+test('授業外の提出で自動で抑えた行は内訳に出さず、最後に上限点を書き添える（上限点は行の問題文から読む）', () => {
   const rows = [
     row({ final_score: 5 }),
     row({ question_id: 'Q002', question_text_snapshot: '理由を説明せよ', final_score: 10, max_score: 10, status: 'MANUAL_GRADED' }),
-    row({ question_id: '__LATE__', question_text_snapshot: '', final_score: -3, max_score: '', status: 'AUTO_GRADED' })
+    row({ question_id: '__LATE__', question_text_snapshot: '授業時間外の提出（上限12点）', final_score: -3, max_score: 0, status: 'AUTO_GRADED', manual_score: '' })
   ];
   assert.equal(buildCommentary(rows),
     '日本の首都は？：5 / 5点\n\n理由を説明せよ：10 / 10点\n\n授業時間外の提出のため、合計点は上限の12点までです');
   assert.equal(totalScore(rows), 12);
+});
+
+test('上限点は呼び出し側から渡してもよく、渡した値を使う', () => {
+  const rows = [row({ final_score: 5 }), row({ question_id: '__LATE__', question_text_snapshot: '', final_score: -2, max_score: 0, status: 'AUTO_GRADED', manual_score: '' })];
+  assert.ok(buildCommentary(rows, 3).endsWith('授業時間外の提出のため、合計点は上限の3点までです'));
+});
+
+test('先生が manual_score で抑えたときは、抑えた後の合計点を書き添える', () => {
+  const rows = [
+    row({ final_score: 5 }),
+    row({ question_id: '__LATE__', question_text_snapshot: '授業時間外の提出（上限2点）', final_score: -1, max_score: 0, status: 'MANUAL_GRADED', manual_score: -1 })
+  ];
+  assert.ok(buildCommentary(rows).endsWith('授業時間外の提出のため、合計点は4点です'), buildCommentary(rows));
 });
 
 test('授業外でも抑えなかった（0点の）行なら、書き添えない', () => {

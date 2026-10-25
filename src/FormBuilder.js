@@ -136,8 +136,8 @@ function populateForm_(form, spec, version) {
     item.setTitle(it.title);
     if (it.help_text) item.setHelpText(it.help_text);
     item.setRequired(it.required);
-    // 問題の項目には点数を付けない。採点は仕組みの中で行い、合計点は氏名欄に出す（ADR 0013）
-    applyFeedback_(item, it);
+    // 問題の項目には点数もフィードバックも付けない。採点は仕組みの中で行い、合計点と講評は氏名欄に出す（ADR 0013）。
+    // 選択肢の正解を設定しないので、フィードバックを付けると全員に「不正解」のほうが出てしまう
     mapping.push([version, form.getId(), it.question_id, String(item.getId()), now]);
   });
   var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.FORM_MAPPING);
@@ -156,15 +156,6 @@ function addItem_(form, it) {
     case 'CHECKBOX': return choiceFor(form.addCheckboxItem());
     case 'DROPDOWN': return choiceFor(form.addListItem());
     default: throw new Error('未対応の問題タイプ: ' + it.kind);
-  }
-}
-
-function applyFeedback_(item, it) {
-  if (it.feedback_correct && typeof item.setFeedbackForCorrect === 'function') {
-    item.setFeedbackForCorrect(FormApp.createFeedback().setText(it.feedback_correct).build());
-  }
-  if (it.feedback_incorrect && typeof item.setFeedbackForIncorrect === 'function') {
-    item.setFeedbackForIncorrect(FormApp.createFeedback().setText(it.feedback_incorrect).build());
   }
 }
 

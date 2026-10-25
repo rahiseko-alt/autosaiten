@@ -5,10 +5,11 @@
  * 各テストのスプレッドシートは ID で開いて Queue と Results を読むだけにする（ADR 0010）。
  * 新しいテストは、ひな型をドライブでコピーし、名簿シートだけを書き込む。
  * 保管では、テストのフォームの受付を閉じ、テストの Settings に ARCHIVED の行を足し（列は変えない）、ファイルを移す。
+ * 集計表の設定は先生がひな型・フォルダの ID を入れるので隠さない。
  */
 
 var GB_SHEET_ORDER_ = ['名簿', 'テスト一覧', '成績', '要確認', '取り込み記録', '集計表の設定'];
-var GB_HIDDEN_ = ['取り込み記録', '集計表の設定'];
+var GB_HIDDEN_ = ['取り込み記録'];
 var GB_CHECKBOX_ROWS_ = 500;
 
 function onOpen() {
@@ -59,9 +60,9 @@ function createNewTest() {
     var settings = {};
     gbReadTable_('集計表の設定').rows.forEach(function (r) { settings[gbText_(r.項目)] = gbText_(r.値); });
     var templateId = spreadsheetIdFromUrl(settings['ひな型のID']);
-    var folderId = settings['新しいテストのフォルダのID'];
+    var folderId = folderIdFromUrl(settings['新しいテストのフォルダのID']);
     if (templateId === '' || folderId === '') {
-      message = '集計表の設定（隠してあるシート）に、ひな型のIDと新しいテストのフォルダのIDを入れてください';
+      message = '集計表の設定シートに、ひな型のIDと新しいテストのフォルダのID（URL でもよい）を入れてください';
       return;
     }
     var template = SpreadsheetApp.openById(templateId);
@@ -142,8 +143,9 @@ function importTests() {
     });
     gbWriteRows_('取り込み記録', records);
     gbAddAliases_(records);
-    gbWriteRows_('要確認', reviewRows(records, tests));
+    gbWriteRows_('要確認', reviewRows(records, tests, roster));
     gbCheckboxes_('要確認', 'この回答を使う');
+    gbStudentDropdown_(roster);
     gbWriteGrades_(buildGradeTable(records, roster, tests));
   });
   var message = count + '件のテストを取り込みました。';
@@ -155,6 +157,7 @@ function importTests() {
  * テスト一覧で選んだ行のテストを保管する（2段階。何をするかは archiveStep が決める）。
  * 1回目は全版のフォームの受付を閉じて停止待ちにする。2回目は保管できるかを確かめ、よければ Settings に ARCHIVED を書き、
  * テスト側がトリガーを外していれば、スプレッドシートと全版のフォームを保管用のフォルダへ移して保管済みにする。
+ * 2回目以降も毎回、その時点の全版のフォームの受付を閉じ直す。取り込みでは保管の段階を進めない。
  */
 function archiveTest() {
   var message;
@@ -182,39 +185,88 @@ function archiveTest() {
     if (gbText_(t.スプレッドシートのID) === '') gbSetCell_(testTable, index, 'スプレッドシートのID', id);
 
     var source = SpreadsheetApp.openById(id);
-    var formIds = archiveFormIds(gbReadTable_('FormMapping', source).rows);
+    var formMapping = gbReadTable_('FormMapping', source).rows;
+    var formIds = archiveFormIds(formMapping);
+    var queue = gbReadTable_('Queue', source).rows;
     var settingsTable = gbReadTable_('Settings', source);
+    // どの段でも、その時点の全版のフォームの受付を閉じ直す（停止待ちの間に「これでOK」で新しい版ができても閉じる）
+    var status = gbText_(t.保管の状態);
+    var closed = status === '' || status === GB_ARCHIVE.停止待ち ? gbCloseForms_(formIds) : { failed: [], responseCount: 0 };
     var step = archiveStep({
-      status: t.保管の状態, settings: settingsTable.rows,
-      blockers: gbText_(t.保管の状態) === GB_ARCHIVE.停止待ち ? archiveBlockers({
-        testId: id, queue: gbReadTable_('Queue', source).rows, results: gbReadTable_('Results', source).rows,
-        records: gbReadTable_('取り込み記録').rows
+      status: t.保管の状態, settings: settingsTable.rows, queue: queue, formMapping: formMapping,
+      blockers: status === GB_ARCHIVE.停止待ち ? archiveBlockers({
+        testId: id, queue: queue, results: gbReadTable_('Results', source).rows,
+        records: gbReadTable_('取り込み記録').rows, formResponseCount: closed.responseCount
       }) : []
     });
-    message = name + ': ' + step.message;
+    var moveFailed = [];
+    var report = function () {
+      var r = archiveFormReport({ step: step, closeFailed: closed.failed, moveFailed: moveFailed });
+      message = name + ': ' + r.message;
+      return r;
+    };
 
     if (step.action === 'close') {
-      formIds.forEach(function (formId) { FormApp.openById(formId).setAcceptingResponses(false); });
       gbSetCell_(testTable, index, '保管の状態', GB_ARCHIVE.停止待ち);
+      report();
       return;
     }
-    if (step.action !== 'wait' && step.action !== 'move') return;
+    if (step.action !== 'wait' && step.action !== 'move') {
+      report();
+      return;
+    }
+    // 受付を閉じられないフォームが残るうちは、保管の印を書かない（印があると、テスト側が新しい回答を取り込まなくなる）
+    if (closed.failed.length > 0) {
+      report();
+      return;
+    }
     var folderId = '';
     if (step.action === 'move') {
-      gbReadTable_('集計表の設定').rows.forEach(function (r) { if (gbText_(r.項目) === '保管用のフォルダのID') folderId = gbText_(r.値); });
+      gbReadTable_('集計表の設定').rows.forEach(function (r) {
+        if (gbText_(r.項目) === '保管用のフォルダのID') folderId = folderIdFromUrl(r.値);
+      });
       if (folderId === '') {
-        message = name + ': 集計表の設定（隠してあるシート）に、保管用のフォルダのIDを入れてから、もう一度「保管する」を押してください';
+        message = name + ': 集計表の設定シートに、保管用のフォルダのID（URL でもよい）を入れてから、もう一度「保管する」を押してください';
         return;
       }
     }
     gbMarkArchived_(settingsTable);
-    if (step.action === 'wait') return;
+    if (step.action === 'wait') {
+      report();
+      return;
+    }
     var folder = DriveApp.getFolderById(folderId);
-    [id].concat(formIds).forEach(function (fileId) { DriveApp.getFileById(fileId).moveTo(folder); });
+    [id].concat(formIds).forEach(function (fileId) {
+      try {
+        DriveApp.getFileById(fileId).moveTo(folder);
+      } catch (e) {
+        moveFailed.push(fileId);
+      }
+    });
+    if (!report().archived) return;
     gbSetCell_(testTable, index, '保管の状態', GB_ARCHIVE.保管済み);
     gbSetCell_(testTable, index, '実施中', false);
   });
   SpreadsheetApp.getUi().alert(message);
+}
+
+/**
+ * フォームの受付を閉じ（何度やっても同じ）、全版の回答数を数える。開けない・閉じられないフォームは、残りを止めずに ID を覚える。
+ * @return {{failed: string[], responseCount: number}}
+ */
+function gbCloseForms_(formIds) {
+  var failed = [];
+  var responseCount = 0;
+  formIds.forEach(function (formId) {
+    try {
+      var form = FormApp.openById(formId);
+      form.setAcceptingResponses(false);
+      responseCount += form.getResponses().length;
+    } catch (e) {
+      failed.push(formId);
+    }
+  });
+  return { failed: failed, responseCount: responseCount };
 }
 
 /** テストの Settings の ARCHIVED を TRUE にする。行が無ければ足す（列は変えない）。 */
@@ -249,6 +301,8 @@ function gbEnsureSheets_() {
   GB_SHEET_ORDER_.forEach(function (name) {
     var sheet = ss.getSheetByName(name) || ss.insertSheet(name);
     if (GB_HIDDEN_.indexOf(name) >= 0) sheet.hideSheet();
+    // 前の版で隠した集計表の設定も、先生が開けるよう出す
+    else if (sheet.isSheetHidden()) sheet.showSheet();
     if (sheet.getRange(1, 1).getValue() !== '') return;
     // 成績は表示専用で見出しは取り込みのたびに作るので、先頭の注意書きだけを置く
     var first = name === '成績' ? [GB_GRADES_NOTICE] : GB_SHEETS[name];
@@ -345,4 +399,18 @@ function gbCheckboxes_(name, header) {
   if (col < 1) return;
   var rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
   table.sheet.getRange(2, col, GB_CHECKBOX_ROWS_, 1).setDataValidation(rule);
+}
+
+/** 要確認の「この学生にする」に、名簿の学生番号の一覧のプルダウンを付ける。名簿が空なら規則を外す。 */
+function gbStudentDropdown_(roster) {
+  var table = gbReadTable_('要確認');
+  var col = table.headers.indexOf('この学生にする') + 1;
+  if (col < 1) return;
+  var ids = roster.map(function (s) { return gbText_(s.学生番号); }).filter(function (id) { return id !== ''; });
+  var range = table.sheet.getRange(2, col, GB_CHECKBOX_ROWS_, 1);
+  if (ids.length === 0) {
+    range.setDataValidation(null);
+    return;
+  }
+  range.setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(ids, true).setAllowInvalid(false).build());
 }

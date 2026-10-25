@@ -559,6 +559,52 @@ test('上限点を空欄に戻して「手動採点を反映」を押すと、__
   assert.equal(writtenScore(env, 1), 10);
 });
 
+test('「これでOK」を押さずに上限点を変えても、「手動採点を反映」で新しい上限点が使われ、フォームは作り直さない', () => {
+  const env = lateSetup();
+  env.ss.getSheetByName('試験作成').put(1, 6, 8);
+  env.ctx.finalizeManualGrades();
+  assert.equal(env.ctx.readSettings().LATE_CAP, 8);
+  assert.equal(lateOf(env)[0].final_score, -2);
+  assert.equal(writtenScore(env, 1), 8);
+  assert.equal(Object.keys(env.forms).length, 1);
+});
+
+test('試験作成シートの上限点が不正なら、「手動採点を反映」は「これでOK」と同じ理由を出して止まる', () => {
+  const env = lateSetup();
+  env.ss.getSheetByName('試験作成').put(1, 6, 'abc');
+  env.ctx.finalizeManualGrades();
+  assert.ok(String(control(env, 'MESSAGE')).includes('授業外の上限点は0以上の数で入れてください'), control(env, 'MESSAGE'));
+  assert.equal(env.ctx.readSettings().LATE_CAP, 6);
+  assert.equal(env.forms.form1.submitted.length, 1);
+});
+
+test('決め直しで確定済みの回答が要確認に戻ったら、待ち行列を戻し、フォームの点が古いままだと記録する', () => {
+  const env = lateSetup({ end: LATER });
+  assert.equal(env.ss.getSheetByName('Queue').cell(2, 5), 'COMPLETED');
+  env.ss.getSheetByName('試験作成').put(4, 6, ''); // 終わる日時を消すと、授業内か授業外か決められない
+  env.ctx.finalizeManualGrades();
+  assert.equal(lateOf(env)[0].status, 'REVIEW_REQUIRED');
+  assert.equal(env.ss.getSheetByName('Queue').cell(2, 5), 'REVIEW_REQUIRED');
+  const warn = env.ss.getSheetByName('Logs').rows.filter((r) => r[1] === 'WARN' && String(r[4]).includes('この回答のフォームの点数は、確定し直すまで古いままです'));
+  assert.equal(warn.length, 1);
+});
+
+test('問題の項目には、正解・不正解のフィードバックを付けない（Questions に書いてあっても）', () => {
+  const env = prepare();
+  pressOk(env);
+  const q = env.ss.getSheetByName('Questions');
+  const headers = q.rows[0];
+  q.put(2, headers.indexOf('feedback_correct') + 1, 'よし');
+  q.put(2, headers.indexOf('feedback_incorrect') + 1, 'ざんねん');
+  env.ss.getSheetByName('試験作成').put(11, 2, '日本の首都はどこ？');
+  pressOk(env);
+  env.forms.form1.items.forEach((i) => {
+    assert.equal(i.feedbackForCorrect, undefined, i.title);
+    assert.equal(i.feedbackForIncorrect, undefined, i.title);
+  });
+  assert.deepEqual(env.ss.getSheetByName('Questions').rows[0], headers);
+});
+
 test('manual_score の入った __LATE__ の行は、上限点を変えても先生の判断として残る', () => {
   const env = lateSetup();
   const sheet = env.ss.getSheetByName('Results');

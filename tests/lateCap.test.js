@@ -57,6 +57,14 @@ test('名簿の氏名は、全角半角と前後の空白の違いをそろえ�
   assert.equal(late.final_score, -4);
 });
 
+test('名簿の氏名は、集計表と同じく大文字小文字と連続する空白の違いもそろえて引く', () => {
+  const names = roster.concat([{ クラス: '国際', 氏名: 'Taro  Yamada' }]);
+  const late = plan({ rows: [row({ respondent_name: ' taro YAMADA ', final_score: 10 })], roster: names });
+  assert.equal(late.status, 'AUTO_GRADED');
+  const kim = plan({ rows: [row({ respondent_name: 'ｋｉｍ', respondent_class: '総合', final_score: 10 })] });
+  assert.equal(kim.status, 'AUTO_GRADED');
+});
+
 test('名簿に氏名が無ければ、点を空にした要確認の行を作る', () => {
   const late = plan({ rows: [row({ respondent_name: '佐藤', final_score: 10 })] });
   assert.equal(late.status, 'REVIEW_REQUIRED');
@@ -96,10 +104,12 @@ test('manual_score の無い既存の __LATE__ 行は、作り直す（上限点
   assert.equal(late.question_text_snapshot, '授業時間外の提出（上限8点）');
 });
 
-test('__LATE__ の manual_score は 0 以下の数だけを有効とする', () => {
-  assert.equal(validLateManualScore(0), true);
-  assert.equal(validLateManualScore(-3), true);
-  assert.equal(validLateManualScore(2), false);
-  assert.equal(validLateManualScore('abc'), false);
-  assert.equal(validLateManualScore(''), false);
+test('__LATE__ の manual_score は、-(__LATE__ を除く合計点) 以上 0 以下の数だけを有効とする', () => {
+  assert.equal(validLateManualScore(0, 10), true);
+  assert.equal(validLateManualScore(-3, 10), true);
+  assert.equal(validLateManualScore(-10, 10), true);
+  assert.equal(validLateManualScore(-11, 10), false);
+  assert.equal(validLateManualScore(2, 10), false);
+  assert.equal(validLateManualScore('abc', 10), false);
+  assert.equal(validLateManualScore('', 10), false);
 });

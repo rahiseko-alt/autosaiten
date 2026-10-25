@@ -126,6 +126,8 @@ function planImport(input) {
     var chosen = gbText_(old.この学生にする);
     var match = known[chosen] ? { studentId: chosen, reason: '', suggestion: '' }
       : matchStudent({ email: resp.email, name: resp.name }, input.roster);
+    // 名簿に無い番号の指定は黙って照合し直さず、先生に直してもらう
+    if (chosen !== '' && !known[chosen]) match = { studentId: '', reason: '指定した学生番号が名簿に無い', suggestion: match.suggestion };
     var isDone = !!completed[resp.id];
     var rec = {
       テストのID: testId, 回答の番号: resp.id, 回答の氏名: resp.name, 回答のアカウント: resp.email, 回答のクラス: resp.cls,
@@ -162,15 +164,26 @@ function gbTestsById_(tests) {
   return byId;
 }
 
-/** 要確認シートの行。理由のある取り込み記録だけを出す。 */
-function reviewRows(records, tests) {
+/**
+ * 要確認シートの行。理由のある取り込み記録だけを出す。おすすめの学生は「S001 山田 太郎」のように名簿の氏名を並べる。
+ * @param {Object[]} records 取り込み記録
+ * @param {Object[]} tests テスト一覧の行
+ * @param {Object[]} roster 名簿の行（学生番号が振られたもの）
+ */
+function reviewRows(records, tests, roster) {
   var byId = gbTestsById_(tests);
+  var names = {};
+  (roster || []).forEach(function (s) { if (gbText_(s.学生番号) !== '') names[gbText_(s.学生番号)] = gbText_(s.氏名); });
+  var withName = function (id) {
+    var sid = gbText_(id);
+    return sid !== '' && names[sid] ? sid + ' ' + names[sid] : sid;
+  };
   return records.filter(function (r) { return gbText_(r.理由) !== ''; }).map(function (r) {
     var t = byId[gbText_(r.テストのID)];
     return {
       テスト: t ? gbText_(t.テスト名) : gbText_(r.テストのID), 回答の番号: r.回答の番号, 回答の氏名: r.回答の氏名,
       回答のアカウント: r.回答のアカウント, 送信時刻: r.送信時刻, 合計点: r.合計点, 理由: r.理由,
-      おすすめの学生: r.おすすめの学生, この学生にする: gbText_(r.この学生にする), この回答を使う: gbTrue_(r.この回答を使う),
+      おすすめの学生: withName(r.おすすめの学生), この学生にする: gbText_(r.この学生にする), この回答を使う: gbTrue_(r.この回答を使う),
       テストのID: r.テストのID
     };
   });
@@ -351,18 +364,25 @@ function archiveFormIds(formMapping) {
 /**
  * テストを保管できるかを確かめ、止める理由の一覧を返す（次の操作も添える）。止める理由が無ければ []。
  * Results の合計点は取り込みと同じく __LATE__ の行も含めて足し、取り込み記録の合計点と比べる。
- * @param {{testId: string, queue: Object[], results: Object[], records: Object[]}} input records はすべてのテストの取り込み記録
+ * FAILED は「手動採点を反映」では直らないので、別に数えて再採点を案内する。
+ * フォームを閉じる直前の回答は、テスト側の定期処理が拾うまで Queue に無いので、全版のフォームの回答数と Queue の行数を比べる。
+ * @param {{testId: string, queue: Object[], results: Object[], records: Object[], formResponseCount: number}} input
+ *     records はすべてのテストの取り込み記録、formResponseCount は全版のフォームの回答数の合計
  * @return {string[]}
  */
 function archiveBlockers(input) {
   var testId = gbText_(input.testId);
   var undecided = {};
+  var failed = {};
   var completed = {};
+  var queued = {};
   var open = 0;
   input.queue.forEach(function (j) {
     var id = gbText_(j.response_id);
     var status = gbText_(j.status);
+    if (id !== '') queued[id] = true;
     if (status === 'COMPLETED') completed[id] = true;
+    else if (status === 'FAILED' && id !== '') failed[id] = true;
     else if (id !== '') undecided[id] = true;
     if (GB_OPEN_JOB_STATUSES.indexOf(status) >= 0) open += 1;
   });
@@ -385,6 +405,14 @@ function archiveBlockers(input) {
   if (undecidedCount > 0) {
     blockers.push('採点が確定していない回答が' + undecidedCount + '件あります。テストのスプレッドシートで採点を確定してから（「手動採点を反映」など）、もう一度「保管する」を押してください');
   }
+  var failedCount = Object.keys(failed).length;
+  if (failedCount > 0) {
+    blockers.push('採点に失敗した回答が' + failedCount + '件あります。テストの Results でその回答の行を選び、メニューの『選択回答を再採点』を押してください');
+  }
+  var notQueued = (Number(input.formResponseCount) || 0) - Object.keys(queued).length;
+  if (notQueued > 0) {
+    blockers.push('フォームに、テストへまだ取り込まれていない回答が' + notQueued + '件あります。1分ほどしてから、もう一度「保管する」を押してください');
+  }
   if (notImported > 0) {
     blockers.push('集計表に取り込まれていない確定済みの回答が' + notImported + '件あります。「取り込む」を押してから、もう一度「保管する」を押してください');
   }
@@ -402,8 +430,11 @@ function archiveBlockers(input) {
  * 空 → close（全版のフォームの受付を閉じ、停止待ちにする）。
  * 停止待ち → 止める理由があれば blocked。無ければ、テストの Settings に TRIGGERS_REMOVED（テスト側がトリガーを外した印）が
  * あれば move（ファイルを保管用のフォルダへ移し、保管済みにする）、まだなら wait。wait と move では ARCHIVED を TRUE にする。
+ * Queue に行が無く FormMapping も空のテスト（初期セットアップを押していない＝トリガーが無い）は、TRIGGERS_REMOVED を待たずに move。
  * 保管済み → done。それ以外の値 → unknown（何もしない）。
- * @param {{status: string, blockers: string[], settings: Object[]}} input settings はテストの Settings の行（key・value）
+ * close・blocked・wait・move のどれでも、仕組みの側でその時点の全版のフォームの受付を閉じ直す（途中で新しい版ができても閉じる）。
+ * @param {{status: string, blockers: string[], settings: Object[], queue: Object[], formMapping: Object[]}} input
+ *     settings はテストの Settings の行（key・value）、queue と formMapping はテストのシートの行（省くと行がある扱い）
  * @return {{action: string, message: string}}
  */
 function archiveStep(input) {
@@ -419,10 +450,32 @@ function archiveStep(input) {
     return { action: 'blocked', message: 'まだ保管できません。\n' + input.blockers.join('\n') };
   }
   var removed = (input.settings || []).some(function (r) { return gbText_(r.key) === 'TRIGGERS_REMOVED'; });
-  if (!removed) {
+  var untouched = Array.isArray(input.queue) && input.queue.length === 0 &&
+    Array.isArray(input.formMapping) && input.formMapping.length === 0;
+  if (!removed && !untouched) {
     return { action: 'wait', message: 'まだ止まっていません。1分ほどしてからもう一度『保管する』を押してください' };
   }
   return { action: 'move', message: '保管しました。スプレッドシートと全版のフォームを保管用のフォルダへ移しました' };
+}
+
+/**
+ * フォームの受付を閉じ直し、ファイルを移した結果を、先生に示す文と保管済みにしてよいかにまとめる。
+ * 開けない・閉じられない・移せないファイルは ID を並べる。move の段では1つでも失敗したら保管済みにしない（もう一度押せば続きから）。
+ * @param {{step: {action: string, message: string}, closeFailed: string[], moveFailed: string[]}} input
+ * @return {{message: string, archived: boolean}}
+ */
+function archiveFormReport(input) {
+  var closeFailed = input.closeFailed || [];
+  var moveFailed = input.moveFailed || [];
+  var notes = [];
+  if (closeFailed.length > 0) notes.push('受付を閉じられなかったフォーム: ' + closeFailed.join(', '));
+  if (moveFailed.length > 0) notes.push('保管用のフォルダへ移せなかったファイル: ' + moveFailed.join(', '));
+  var isMove = input.step.action === 'move';
+  var archived = isMove && notes.length === 0;
+  if (notes.length === 0) return { message: input.step.message, archived: archived };
+  var head = isMove ? 'まだ保管済みにしていません。開けるようにしてから、もう一度「保管する」を押してください'
+    : input.step.message + '\nフォームを開けるようにしてから、もう一度「保管する」を押してください';
+  return { message: head + '\n' + notes.join('\n'), archived: false };
 }
 
 /** 新しいテストのスプレッドシートの名前（「科目 実施日 テスト名」。成績の列の見出しと同じ形）。 */
@@ -438,6 +491,14 @@ function spreadsheetIdFromUrl(v) {
   return /^[A-Za-z0-9_-]{20,}$/.test(s) ? s : '';
 }
 
+/** ドライブのフォルダの URL（…/folders/ID、…?id=ID）または ID そのものから ID を取り出す。取り出せなければ ''。 */
+function folderIdFromUrl(v) {
+  var s = gbText_(v);
+  var m = s.match(/\/folders\/([A-Za-z0-9_-]+)/) || s.match(/[?&]id=([A-Za-z0-9_-]+)/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_-]{20,}$/.test(s) ? s : '';
+}
+
 if (typeof module !== 'undefined') {
   module.exports = {
     GB_SHEETS: GB_SHEETS, GB_SETTINGS: GB_SETTINGS, GB_GRADES_NOTICE: GB_GRADES_NOTICE, GB_TEST_ROSTER_HEADERS: GB_TEST_ROSTER_HEADERS,
@@ -445,6 +506,6 @@ if (typeof module !== 'undefined') {
     buildGradeTable: buildGradeTable, assignStudentIds: assignStudentIds, spreadsheetIdFromUrl: spreadsheetIdFromUrl,
     planAliasAdditions: planAliasAdditions, rosterForTest: rosterForTest, templateProblems: templateProblems,
     newTestName: newTestName, GB_ARCHIVE: GB_ARCHIVE, archiveFormIds: archiveFormIds, archiveBlockers: archiveBlockers,
-    archiveStep: archiveStep
+    archiveStep: archiveStep, archiveFormReport: archiveFormReport, folderIdFromUrl: folderIdFromUrl
   };
 }

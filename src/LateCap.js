@@ -16,9 +16,14 @@ function lcBlank_(v) {
   return v === undefined || v === null || String(v).trim() === '';
 }
 
-/** 氏名・クラスの比べ方。全角半角（NFKC）と前後の空白の違いをそろえる。 */
+/** クラスの比べ方。全角半角（NFKC）と前後の空白の違いをそろえる。 */
 function lcNorm_(v) {
   return String(v === undefined || v === null ? '' : v).normalize('NFKC').trim();
+}
+
+/** 氏名の比べ方。集計表の照合（gradebook/Gradebook.js の gbName_）と同じく、NFKC・大文字小文字・空白の違いをそろえる。 */
+function lcName_(v) {
+  return lcNorm_(v).toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 function lcTime_(v) {
@@ -27,19 +32,24 @@ function lcTime_(v) {
   return isNaN(t) ? null : t;
 }
 
-/** __LATE__ の manual_score は、抑える点（0 以下の数）。0 なら抑えない。加点はしない。 */
-function validLateManualScore(value) {
+/**
+ * __LATE__ の manual_score は、抑える点（0 以下の数）。0 なら抑えない。加点はしない。
+ * 合計点より多くは抑えられない（抑えた後の合計が負にならない）。
+ * @param {*} value manual_score
+ * @param {number} total __LATE__ を除く最終点の和
+ */
+function validLateManualScore(value, total) {
   if (lcBlank_(value)) return false;
   var n = Number(value);
-  return isFinite(n) && n <= 0;
+  return isFinite(n) && n <= 0 && n >= -(Number(total) || 0);
 }
 
 /** 名簿で氏名から引いたクラス。見つからない、または別々のクラスに同じ氏名があれば null。 */
 function lcRosterClass_(roster, name) {
-  var key = lcNorm_(name);
+  var key = lcName_(name);
   var classes = {};
   (roster || []).forEach(function (r) {
-    if (key !== '' && lcNorm_(r.氏名) === key) classes[lcNorm_(r.クラス)] = true;
+    if (key !== '' && lcName_(r.氏名) === key) classes[lcNorm_(r.クラス)] = true;
   });
   var found = Object.keys(classes);
   return found.length === 1 ? found[0] : null;

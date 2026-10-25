@@ -25,23 +25,42 @@ function recomputeResponses(resultRows, late) {
   var valid = fnFn_('validManualScore', './Scoring.js');
   var validLate = fnFn_('validLateManualScore', './LateCap.js');
   var planLate = fnFn_('planLateRow', './LateCap.js');
+  var totalOf = fnFn_('totalScore', './Commentary.js');
   var lateId = (typeof LATE_QUESTION_ID !== 'undefined') ? LATE_QUESTION_ID : require('./Commentary.js').LATE_QUESTION_ID;
   var grouped = {};
   var errors = {};
+  var addError = function (id, text) { (errors[id] = errors[id] || []).push(text); };
   resultRows.forEach(function (r) {
     var copy = Object.assign({}, r);
-    var isLate = String(copy.question_id) === lateId;
-    if (!fnBlank_(copy.manual_score) && !(isLate ? validLate(copy.manual_score) : valid(copy.manual_score, copy.max_score))) {
-      (errors[copy.response_id] = errors[copy.response_id] || []).push(copy.question_id + ' の manual_score「' + copy.manual_score + '」は ' +
-        (isLate ? '0 以下（抑える点。0 なら抑えない）' : '0〜' + copy.max_score) + ' の数値ではありません');
-      copy.manual_score = '';
-    } else if (!fnBlank_(copy.manual_score) && (isLate || copy.status === 'MANUAL_PENDING' || copy.status === 'REVIEW_REQUIRED')) {
-      // __LATE__ は自動で決めた行でも、manual_score が入れば先生の判断になる
-      copy.status = 'MANUAL_GRADED';
+    if (String(copy.question_id) !== lateId) {
+      if (!fnBlank_(copy.manual_score) && !valid(copy.manual_score, copy.max_score)) {
+        addError(copy.response_id, copy.question_id + ' の manual_score「' + copy.manual_score + '」は 0〜' + copy.max_score + ' の数値ではありません');
+        copy.manual_score = '';
+      } else if (!fnBlank_(copy.manual_score) && (copy.status === 'MANUAL_PENDING' || copy.status === 'REVIEW_REQUIRED')) {
+        copy.status = 'MANUAL_GRADED';
+      }
+      var f = resolve(copy);
+      copy.final_score = f.final_score === null ? '' : f.final_score;
     }
-    var f = resolve(copy);
-    copy.final_score = f.final_score === null ? '' : f.final_score;
     (grouped[copy.response_id] = grouped[copy.response_id] || []).push(copy);
+  });
+  // __LATE__ の manual_score の有効な範囲は、ほかの行の合計点で決まるので、回答ごとにまとめてから確かめる
+  Object.keys(grouped).forEach(function (id) {
+    var others = grouped[id].filter(function (r) { return String(r.question_id) !== lateId; });
+    var total = totalOf(others);
+    grouped[id].forEach(function (copy) {
+      if (String(copy.question_id) !== lateId) return;
+      if (!fnBlank_(copy.manual_score) && !validLate(copy.manual_score, total)) {
+        addError(id, copy.question_id + ' の manual_score「' + copy.manual_score + '」は ' + (-total) +
+          '〜0（抑える点。0 なら抑えない）の数値ではありません');
+        copy.manual_score = '';
+      } else if (!fnBlank_(copy.manual_score)) {
+        // __LATE__ は自動で決めた行でも、manual_score が入れば先生の判断になる
+        copy.status = 'MANUAL_GRADED';
+      }
+      var f = resolve(copy);
+      copy.final_score = f.final_score === null ? '' : f.final_score;
+    });
   });
   var out = {};
   Object.keys(grouped).forEach(function (id) {
