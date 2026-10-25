@@ -107,19 +107,26 @@ function runJob_(job, rowIndex, settings, force) {
   var outcome;
   try {
     var done = null;
+    var late = lateRules_();
     if (!force) {
       // 採点と保存は済んでいて、書き戻しだけが失敗していた場合は、LLM を呼び直さない。
       var existing = readResultsWithRows_().filter(function (r) { return r.response_id === job.response_id; });
-      var again = existing.length > 0 ? recomputeResponses(existing)[job.response_id] : null;
+      var again = existing.length > 0 ? recomputeResponses(existing, late)[job.response_id] : null;
       if (again && again.finalized) done = { rows: again.rows, finalized: true };
     }
     if (!done) {
       var lastAttempt = (Number(job.retry_count) || 0) + 1 >= QUEUE_MAX_RETRIES;
       var graded = gradeJob_(job, settings, { onProviderError: lastAttempt ? 'review' : 'throw' });
       var saved = saveResultRows(graded.rows);
-      var recomputed = recomputeResponses(saved)[job.response_id];
+      // 保存した行に、既にある __LATE__ の行（先生の manual_score を含む）を添えて決め直す
+      var lateKept = readResultsWithRows_().filter(function (r) {
+        return r.response_id === job.response_id && r.question_id === LATE_QUESTION_ID;
+      });
+      var recomputed = recomputeResponses(saved.concat(lateKept), late)[job.response_id];
       done = { rows: recomputed.rows, finalized: recomputed.finalized };
     }
+    // 授業外の上限は、結果を書く時点で毎回決め直す（不要になった行は消す）
+    saveLateRow_(job.response_id, done.rows);
     if (done.finalized) {
       writeBackScores(job.form_id, job.response_id, done.rows);
       outcome = { type: 'FINALIZED' };

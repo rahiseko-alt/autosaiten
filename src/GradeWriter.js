@@ -43,6 +43,34 @@ function saveResultRows(freshRows) {
   return merged.map(function (m) { return m.row; });
 }
 
+/** 授業外の上限の決まり（Settings の LATE_CAP・CLASS_END_<クラス> と名簿）。recomputeResponses に渡す。 */
+function lateRules_() {
+  var settings = readSettings();
+  var classEnds = {};
+  Object.keys(settings).forEach(function (key) {
+    if (key.indexOf(CLASS_END_KEY_PREFIX) === 0) classEnds[key.slice(CLASS_END_KEY_PREFIX.length)] = settings[key];
+  });
+  return { cap: settings[LATE_CAP_KEY], classEnds: classEnds, roster: readTable(SHEET_NAMES.ROSTER), now: new Date() };
+}
+
+/**
+ * 1回答の `__LATE__` の行を、決め直した rows に合わせて Results に書く。
+ * rows にあれば更新するか足し、無ければ消す（同じ response_id + question_id は1行だけ）。
+ */
+function saveLateRow_(responseId, rows) {
+  var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.RESULTS);
+  var headers = SHEET_HEADERS.Results;
+  var old = readResultsWithRows_().filter(function (r) {
+    return r.response_id === responseId && r.question_id === LATE_QUESTION_ID;
+  })[0];
+  var fresh = rows.filter(function (r) { return r.question_id === LATE_QUESTION_ID; })[0];
+  if (fresh) {
+    writeResultValues_(sheet, old ? old.__row : sheet.getLastRow() + 1, [headers.map(function (h) { return fresh[h]; })]);
+  } else if (old) {
+    sheet.deleteRow(old.__row);
+  }
+}
+
 function writeResultValues_(sheet, startRow, valueRows) {
   var headers = SHEET_HEADERS.Results;
   RESULTS_TEXT_COLUMNS.forEach(function (name) {
@@ -79,6 +107,7 @@ function writeBackScores(formId, responseId, rows) {
 
 /**
  * 教師が入れた manual_score を反映する。確定した回答はフォームへ書き戻し、Queue を COMPLETED にする。
+ * 授業外の上限（`__LATE__` の行）も毎回決め直す。上限点や終わる日時を直して押し直せば、合計点が直る。
  * 回答ごとに処理し、1件の失敗や入力ミスで残りを止めない。
  */
 function finalizeManualGrades() {
@@ -93,38 +122,55 @@ function finalizeManualGrades() {
     var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.RESULTS);
     var headers = SHEET_HEADERS.Results;
     var existing = readResultsWithRows_();
-    var recomputed = recomputeResponses(existing);
+    var recomputed = recomputeResponses(existing, lateRules_());
     var rowIndexOf = {};
     existing.forEach(function (r) { rowIndexOf[r.response_id + '\u0000' + r.question_id] = r.__row; });
     var queue = readQueueRows_();
+    var lateRows = [];
 
     Object.keys(recomputed).forEach(function (responseId) {
       var item = recomputed[responseId];
       try {
         item.errors.forEach(function (e) { problems.push(responseId + ': ' + e); });
-        var before = existing.filter(function (r) { return r.response_id === responseId; });
-        var changed = item.rows.some(function (r, i) {
-          return String(r.final_score) !== String(before[i].final_score) || r.status !== before[i].status;
+        // __LATE__ の行は足されたり消えたりするので、添字ではなく問題番号で新旧を比べる
+        var before = {};
+        existing.forEach(function (r) { if (r.response_id === responseId) before[r.question_id] = r; });
+        var after = {};
+        item.rows.forEach(function (r) { after[r.question_id] = true; });
+        var removed = Object.keys(before).filter(function (id) { return !after[id]; });
+        var changed = removed.length > 0 || item.rows.some(function (r) {
+          var b = before[r.question_id];
+          return !b || String(r.final_score) !== String(b.final_score) || r.status !== b.status ||
+            String(r.question_text_snapshot) !== String(b.question_text_snapshot);
         });
         var job = queue.filter(function (q) { return q.job.response_id === responseId; })[0];
         var needsWriteBack = item.finalized && job && job.job.status !== 'COMPLETED';
         if (!changed && !needsWriteBack) return;
 
         item.rows.forEach(function (r) {
+          if (r.question_id === LATE_QUESTION_ID) {
+            lateRows.push({ row: r, rowIndex: before[r.question_id] ? before[r.question_id].__row : null });
+            return;
+          }
           var rowIndex = rowIndexOf[r.response_id + '\u0000' + r.question_id];
           sheet.getRange(rowIndex, headers.indexOf('final_score') + 1).setValue(r.final_score);
           sheet.getRange(rowIndex, headers.indexOf('status') + 1).setValue(r.status);
         });
+        removed.forEach(function (id) { lateRows.push({ row: null, rowIndex: before[id].__row }); });
         if (item.finalized && job) {
           writeBackScores(job.job.form_id, responseId, item.rows);
           updateJob_(job.rowIndex, { status: 'COMPLETED' });
           done += 1;
+        } else if (!item.finalized && job && job.job.status === 'COMPLETED') {
+          // 上限の決め直しで要確認に戻ったら、集計表が確定とみなさないよう待ち行列も戻す
+          updateJob_(job.rowIndex, { status: 'REVIEW_REQUIRED' });
         }
       } catch (err) {
         problems.push(responseId + ': ' + String(err && err.message));
         writeLog('ERROR', 'FINALIZE_FAILED', responseId, String(err && err.message));
       }
     });
+    writeLateRows_(sheet, lateRows);
   } finally {
     lock.releaseLock();
   }
@@ -133,4 +179,21 @@ function finalizeManualGrades() {
     writeLog('WARN', 'FINALIZE_PROBLEMS', '', problems.length + '件の問題がありました');
   }
   SpreadsheetApp.getActive().toast(done + '件の回答を確定し、フォームへ反映しました' + (problems.length ? '（問題あり。メッセージ欄を確認してください）' : ''), 'AI Grader', 8);
+}
+
+/**
+ * 手動採点の反映で決め直した `__LATE__` の行をまとめて書く。行番号がずれないよう、
+ * 更新と追加を先に行い、消す行は下から消す。
+ * @param {{row: (Object|null), rowIndex: (number|null)}[]} lateRows row が null なら消す
+ */
+function writeLateRows_(sheet, lateRows) {
+  var headers = SHEET_HEADERS.Results;
+  lateRows.forEach(function (l) {
+    if (!l.row) return;
+    var values = [headers.map(function (h) { return l.row[h]; })];
+    writeResultValues_(sheet, l.rowIndex || sheet.getLastRow() + 1, values);
+  });
+  lateRows.filter(function (l) { return !l.row; }).map(function (l) { return l.rowIndex; })
+    .sort(function (a, b) { return b - a; })
+    .forEach(function (rowIndex) { sheet.deleteRow(rowIndex); });
 }

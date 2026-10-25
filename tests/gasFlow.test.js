@@ -444,3 +444,186 @@ test('新しいフォーム・新しい版を作ったときだけ、成績の�
   assert.equal(control(env, 'FORM_VERSION'), 2);
   assert.ok(String(control(env, 'MESSAGE')).includes(guide), control(env, 'MESSAGE'));
 });
+
+// 偽の回答の送信日時は 2026-10-20T10:00:00Z。授業の終わる日時をその前にすれば授業外になる
+const ENDED = new Date('2026-10-20T09:30:00Z');
+const LATER = new Date('2026-10-20T10:30:00Z');
+
+function results(env) {
+  const sheet = env.ss.getSheetByName('Results');
+  const headers = sheet.rows[0];
+  return sheet.rows.slice(1).filter((r) => r.some((v) => v !== '')).map((r) => {
+    const o = {};
+    headers.forEach((h, i) => { o[h] = r[i] === undefined ? '' : r[i]; });
+    return o;
+  });
+}
+
+/** n 回目の書き戻しで氏名欄に書いた点（偽のフォームは前回の点も持つので、最後のものを見る）。 */
+function writtenScore(env, n) {
+  return env.forms.form1.submitted[n][0].grades.slice(-1)[0].score;
+}
+
+function lateOf(env) {
+  return results(env).filter((r) => r.question_id === '__LATE__');
+}
+
+/** 名簿に2クラス、上限点と終わる日時を入れて「これでOK」を押し、授業外の提出を1件採点する。 */
+function lateSetup(opts) {
+  const o = Object.assign({ cap: 6, end: ENDED, name: '山田', cls: '国際', capital: '東京' }, opts);
+  const env = prepare();
+  putRoster(env, [['国際', 1, '山田', ''], ['総合', 2, 'Kim', '']]);
+  pressOk(env);
+  const a = env.ss.getSheetByName('試験作成');
+  a.put(1, 6, o.cap);
+  a.put(4, 6, o.end);
+  a.put(5, 6, LATER);
+  pressOk(env);
+  env.forms.form1.submit({ '氏名（Name）': o.name, 'クラス（Class）': o.cls, '日本の首都は？': o.capital, '4PのPriceを選べ': 'Price' });
+  env.ctx.processGradingQueue();
+  return env;
+}
+
+test('試験作成シートに授業外の上限点とクラスごとの終わる日時の表ができ、クラスは名簿から並ぶ', () => {
+  const env = prepare();
+  const a = env.ss.getSheetByName('試験作成');
+  assert.equal(a.cell(1, 5), '授業外の上限点');
+  putRoster(env, [['国際', 1, '山田', ''], ['総合', 2, 'Kim', '']]);
+  pressOk(env);
+  assert.deepEqual([a.cell(3, 5), a.cell(3, 6)], ['クラス', '授業の終わる日時']);
+  assert.deepEqual([a.cell(4, 5), a.cell(5, 5)], ['国際', '総合']);
+});
+
+test('「これでOK」で上限点と終わる日時が Settings に写り、フォームの版は変わらない', () => {
+  const env = prepare();
+  putRoster(env, [['国際', 1, '山田', ''], ['総合', 2, 'Kim', '']]);
+  pressOk(env);
+  const a = env.ss.getSheetByName('試験作成');
+  a.put(1, 6, 6); a.put(4, 6, ENDED);
+  pressOk(env);
+  const s = env.ctx.readSettings();
+  assert.equal(s.LATE_CAP, 6);
+  assert.equal(s['CLASS_END_国際'], ENDED);
+  assert.equal(s['CLASS_END_総合'], '');
+  assert.equal(Object.keys(env.forms).length, 1);
+  assert.equal(control(env, 'FORM_VERSION'), 1);
+});
+
+test('名簿を並べ直しても、先生が入れた終わる日時はクラスについたまま消えない', () => {
+  const env = prepare();
+  putRoster(env, [['国際', 1, '山田', ''], ['総合', 2, 'Kim', '']]);
+  pressOk(env);
+  const a = env.ss.getSheetByName('試験作成');
+  a.put(4, 6, ENDED); a.put(5, 6, LATER);
+  const roster = env.ss.getSheetByName('名簿');
+  roster.rows = [roster.rows[0]];
+  putRoster(env, [['総合', 2, 'Kim', '']]);
+  pressOk(env);
+  assert.deepEqual([a.cell(4, 5), a.cell(4, 6), a.cell(5, 5), a.cell(5, 6)], ['総合', LATER, '国際', ENDED]);
+});
+
+test('授業外の提出は __LATE__ の行で合計が上限点になり、書き戻しと講評に反映される', () => {
+  const env = lateSetup();
+  const late = lateOf(env);
+  assert.equal(late.length, 1);
+  assert.equal(late[0].final_score, -4);
+  assert.equal(env.ss.getSheetByName('Queue').cell(2, 5), 'COMPLETED');
+  const grade = env.forms.form1.submitted[0][0].grades[0];
+  assert.equal(grade.score, 6);
+  assert.ok(grade.feedback.includes('授業時間外の提出のため、合計点は上限の6点までです'), grade.feedback);
+});
+
+test('授業内の提出には __LATE__ の行ができない', () => {
+  const env = lateSetup({ end: LATER });
+  assert.equal(lateOf(env).length, 0);
+  assert.equal(env.forms.form1.submitted[0][0].grades[0].score, 10);
+});
+
+test('上限点を上げて「手動採点を反映」を押すと、行が直り、合計点を書き戻し直す', () => {
+  const env = lateSetup();
+  env.ss.getSheetByName('試験作成').put(1, 6, 8);
+  pressOk(env);
+  env.ctx.finalizeManualGrades();
+  assert.equal(lateOf(env)[0].final_score, -2);
+  assert.equal(env.forms.form1.submitted.length, 2);
+  assert.equal(writtenScore(env, 1), 8);
+});
+
+test('上限点を空欄に戻して「手動採点を反映」を押すと、__LATE__ の行が消え、満点で書き戻し直す', () => {
+  const env = lateSetup();
+  env.ss.getSheetByName('試験作成').put(1, 6, '');
+  pressOk(env);
+  env.ctx.finalizeManualGrades();
+  assert.equal(lateOf(env).length, 0);
+  assert.equal(results(env).length, 2);
+  assert.equal(writtenScore(env, 1), 10);
+});
+
+test('manual_score の入った __LATE__ の行は、上限点を変えても先生の判断として残る', () => {
+  const env = lateSetup();
+  const sheet = env.ss.getSheetByName('Results');
+  const r = sheet.rows.findIndex((row) => row[4] === '__LATE__') + 1;
+  sheet.put(r, 11, 0); // 先生が「抑えない」と決めた
+  env.ss.getSheetByName('試験作成').put(1, 6, 8);
+  pressOk(env);
+  env.ctx.finalizeManualGrades();
+  const late = lateOf(env);
+  assert.deepEqual([late.length, late[0].manual_score, late[0].final_score, late[0].status], [1, 0, 0, 'MANUAL_GRADED']);
+  assert.equal(writtenScore(env, 1), 10);
+});
+
+test('名簿に無い氏名の授業外の提出は要確認になり、manual_score で決めるまで書き戻さない', () => {
+  const env = lateSetup({ name: '佐藤' });
+  const late = lateOf(env);
+  assert.deepEqual([late.length, late[0].status, late[0].final_score], [1, 'REVIEW_REQUIRED', '']);
+  assert.equal(env.ss.getSheetByName('Queue').cell(2, 5), 'REVIEW_REQUIRED');
+  assert.equal(env.forms.form1.submitted.length, 0);
+  const sheet = env.ss.getSheetByName('Results');
+  sheet.put(sheet.rows.findIndex((row) => row[4] === '__LATE__') + 1, 11, -4);
+  env.ctx.finalizeManualGrades();
+  assert.equal(env.ss.getSheetByName('Queue').cell(2, 5), 'COMPLETED');
+  assert.equal(env.forms.form1.submitted[0][0].grades[0].score, 6);
+});
+
+test('選んだクラスと名簿のクラスが違う授業外の提出は要確認になる', () => {
+  const env = lateSetup({ cls: '総合' });
+  assert.equal(lateOf(env)[0].status, 'REVIEW_REQUIRED');
+  assert.equal(env.forms.form1.submitted.length, 0);
+});
+
+test('記述の採点を反映するときも上限を当てはめ、問題番号で新旧を比べる', () => {
+  const env = prepare({}, [
+    A('日本の首都は？', '短答', 5, '東京'),
+    A('理由を説明せよ', '記述', 10, '模範解答', '', '', '観点')
+  ]);
+  putRoster(env, [['国際', 1, '山田', '']]);
+  pressOk(env);
+  const a = env.ss.getSheetByName('試験作成');
+  a.put(1, 6, 6); a.put(4, 6, ENDED);
+  pressOk(env);
+  env.forms.form1.submit({ '氏名（Name）': '山田', 'クラス（Class）': '国際', '日本の首都は？': '東京', '理由を説明せよ': '回答' });
+  env.ctx.processGradingQueue();
+  assert.equal(lateOf(env).length, 0); // まだ合計が上限を超えない
+  const sheet = env.ss.getSheetByName('Results');
+  sheet.put(sheet.rows.findIndex((row) => row[4] === 'Q002') + 1, 11, 7);
+  env.ctx.finalizeManualGrades();
+  assert.equal(lateOf(env)[0].final_score, -6);
+  assert.equal(env.forms.form1.submitted[0][0].grades[0].score, 6);
+});
+
+test('確定済みの回答も、終わる日時を空欄にして反映し直すと要確認に戻り、待ち行列も確定でなくなる', () => {
+  const env = lateSetup();
+  env.ss.getSheetByName('試験作成').put(4, 6, '');
+  pressOk(env);
+  env.ctx.finalizeManualGrades();
+  assert.equal(lateOf(env)[0].status, 'REVIEW_REQUIRED');
+  assert.equal(env.ss.getSheetByName('Queue').cell(2, 5), 'REVIEW_REQUIRED');
+});
+
+test('授業外の上限点が数でなければ、「これでOK」でエラーになる', () => {
+  const env = prepare();
+  env.ss.getSheetByName('試験作成').put(1, 6, '六');
+  pressOk(env);
+  assert.equal(control(env, 'STATUS'), 'ERROR');
+  assert.ok(String(control(env, 'MESSAGE')).includes('授業外の上限点'), control(env, 'MESSAGE'));
+});

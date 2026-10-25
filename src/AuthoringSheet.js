@@ -15,7 +15,9 @@ function setupAuthoringSheet_(ss) {
     sheet.getRange(AUTHORING_CELLS.FORM_DESCRIPTION).setValue(settings.FORM_DESCRIPTION || '');
     var imported = fromQuestionRows(readTable(SHEET_NAMES.QUESTIONS), readTable(SHEET_NAMES.RUBRICS));
     if (imported.length > 0) writeAuthoringRows_(sheet, imported);
+    sheet.getRange(AUTHORING_LATE.CAP_ROW, AUTHORING_LATE.VALUE_COL).setValue(settings[LATE_CAP_KEY] === undefined ? '' : settings[LATE_CAP_KEY]);
   }
+  setupLateTable_(sheet);
   sheet.getRange('A1').setFontWeight('bold').setFontSize(14);
   sheet.getRange(AUTHORING_CELLS.OK).setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build());
   sheet.getRange('B3:B6').setBackground('#eeeeee');
@@ -72,6 +74,51 @@ function setupAuthoringHighlights_(sheet, first) {
   ]);
 }
 
+/** 授業外の上限点と、クラスごとの授業の終わる日時の表（E・F 列）。見出しを書き、クラスを名簿から並べる。 */
+function setupLateTable_(sheet) {
+  var L = AUTHORING_LATE;
+  sheet.getRange(L.CAP_ROW, L.LABEL_COL).setValue('授業外の上限点')
+    .setNote('授業の終わる日時より後に送信された回答の、合計点の上限。空欄なら抑えません');
+  sheet.getRange(L.CLASS_HEADER_ROW, L.LABEL_COL, 1, 2).setValues([['クラス', '授業の終わる日時']]).setFontWeight('bold');
+  sheet.getRange(L.CAP_ROW, L.VALUE_COL).setBackground('#fff2cc');
+  var rows = L.CLASS_LAST_ROW - L.CLASS_FIRST_ROW + 1;
+  sheet.getRange(L.CLASS_FIRST_ROW, L.VALUE_COL, rows, 1).setBackground('#fff2cc').setNumberFormat('yyyy/MM/dd HH:mm');
+  sheet.getRange(L.CLASS_FIRST_ROW, L.LABEL_COL, rows, 1).setBackground('#eeeeee');
+  arrangeLateClasses_(sheet);
+}
+
+/**
+ * クラスの列を名簿のクラスに並べ直す。先生が入れた日時はクラスについたまま動かし、
+ * 名簿から消えたクラスも日時が入っていれば後ろに残す（消さない）。表に無い日時は Settings から戻す。
+ * @return {{cls: string, end: *}[]} 並べ直した表
+ */
+function arrangeLateClasses_(sheet) {
+  var L = AUTHORING_LATE;
+  var count = L.CLASS_LAST_ROW - L.CLASS_FIRST_ROW + 1;
+  var current = sheet.getRange(L.CLASS_FIRST_ROW, L.LABEL_COL, count, 2).getValues();
+  var settings = readSettings();
+  var endOf = {};
+  var order = rosterClasses_();
+  current.forEach(function (r) {
+    var cls = String(r[0]).trim();
+    if (cls === '') return;
+    endOf[cls] = r[1];
+    if (order.indexOf(cls) < 0 && String(r[1]).trim() !== '') order.push(cls);
+  });
+  var table = order.map(function (cls) {
+    var end = endOf[cls] !== undefined ? endOf[cls] : settings[CLASS_END_KEY_PREFIX + cls];
+    return { cls: cls, end: end === undefined || end === null ? '' : end };
+  });
+  if (table.length > count) {
+    writeLog('WARN', 'LATE_CLASSES_TRUNCATED', '', 'クラスが多すぎるため、授業の終わる日時の表に入りきりません', { classes: order });
+    table = table.slice(0, count);
+  }
+  var values = table.map(function (t) { return [t.cls, t.end]; });
+  while (values.length < count) values.push(['', '']);
+  sheet.getRange(L.CLASS_FIRST_ROW, L.LABEL_COL, count, 2).setValues(values);
+  return table;
+}
+
 function readAuthoringRows_(sheet) {
   var first = AUTHORING_HEADER_ROW + 1;
   var last = sheet.getLastRow();
@@ -118,8 +165,13 @@ function prepareAuthoring_() {
   if (converted.rows.length === 0) {
     errors.push('・試験作成シートの表に問題がありません。11行目から問題を書いてください。');
   }
+  var cap = sheet.getRange(AUTHORING_LATE.CAP_ROW, AUTHORING_LATE.VALUE_COL).getValue();
+  if (String(cap).trim() !== '' && !(isFinite(Number(cap)) && Number(cap) >= 0)) {
+    errors.push('・授業外の上限点は0以上の数で入れてください（抑えないなら空欄）。');
+  }
   return {
     questions: mergeWithExisting(converted.rows, existing),
+    late: { cap: cap, classes: arrangeLateClasses_(sheet) },
     errors: errors,
     title: sheet.getRange(AUTHORING_CELLS.FORM_TITLE).getValue(),
     description: sheet.getRange(AUTHORING_CELLS.FORM_DESCRIPTION).getValue()
@@ -127,7 +179,7 @@ function prepareAuthoring_() {
 }
 
 /**
- * 用意した行を Questions に、タイトルと説明を Settings に写す。
+ * 用意した行を Questions に、タイトル・説明・授業外の上限を Settings に写す。
  * 採点処理が Questions を読む最中に書き換えないよう、同じ鍵（ScriptLock）を取る。
  * 消してから書くのではなく、1回の書き込みで置き換える。
  */
@@ -145,6 +197,9 @@ function commitAuthoring_(prepared) {
     if (values.length > 0) q.getRange(2, 1, values.length, headers.length).setValues(values);
     if (String(prepared.title).trim() !== '') setSetting('FORM_TITLE', prepared.title);
     setSetting('FORM_DESCRIPTION', prepared.description);
+    // 授業外の上限はフォームに出ないので、定義の指紋には入らず、フォームの作り直しも起きない
+    setSetting(LATE_CAP_KEY, prepared.late.cap);
+    prepared.late.classes.forEach(function (t) { setSetting(CLASS_END_KEY_PREFIX + t.cls, t.end); });
   } finally {
     lock.releaseLock();
   }

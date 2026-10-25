@@ -39,3 +39,35 @@ test('不正な manual_score は無視して確定させず、理由を返す', 
   assert.ok(r.errors[0].includes('Q2'));
   assert.deepEqual(r.rows.map((x) => x.final_score), ['', '']);
 });
+
+const late = {
+  cap: 6, classEnds: { 国際: new Date('2026-10-20T10:30:00Z') }, roster: [{ クラス: '国際', 氏名: '山田' }],
+  now: new Date('2026-10-20T12:00:00Z')
+};
+const lateRow = (over) => row(Object.assign({ submitted_at: new Date('2026-10-20T11:00:00Z'), respondent_name: '山田', respondent_class: '国際', max_score: 10 }, over));
+
+test('上限の決まりを渡せば、授業外の回答に __LATE__ の行を足して合計を上限点にする', () => {
+  const r = recomputeResponses([lateRow({ final_score: 8, auto_score: 8 }), lateRow({ question_id: 'Q2', auto_score: 3, final_score: 3 })], late).r1;
+  const capped = r.rows.filter((x) => x.question_id === '__LATE__')[0];
+  assert.equal(capped.final_score, -5);
+  assert.equal(r.finalized, true);
+});
+
+test('不要になった __LATE__ の行は結果から外れる（上限点を空欄に戻した）', () => {
+  const rows = [lateRow({ auto_score: 8, final_score: 8 }), lateRow({ question_id: '__LATE__', grading_mode: 'AUTO', auto_score: -2, final_score: -2, max_score: 0 })];
+  const r = recomputeResponses(rows, Object.assign({}, late, { cap: '' })).r1;
+  assert.deepEqual(r.rows.map((x) => x.question_id), ['Q1']);
+});
+
+test('要確認の __LATE__ が残れば確定しない。0以下の manual_score を入れれば確定し、正の数は無視して理由を返す', () => {
+  const unknown = Object.assign({}, late, { roster: [] });
+  const base = lateRow({ auto_score: 8, final_score: 8 });
+  assert.equal(recomputeResponses([base], unknown).r1.finalized, false);
+  const decided = recomputeResponses([base, lateRow({ question_id: '__LATE__', grading_mode: 'MANUAL', status: 'REVIEW_REQUIRED', auto_score: '', final_score: '', manual_score: -2, max_score: 0 })], unknown).r1;
+  assert.equal(decided.finalized, true);
+  assert.equal(decided.rows[1].final_score, -2);
+  assert.equal(decided.rows[1].status, 'MANUAL_GRADED');
+  const bad = recomputeResponses([base, lateRow({ question_id: '__LATE__', grading_mode: 'MANUAL', status: 'REVIEW_REQUIRED', auto_score: '', final_score: '', manual_score: 3, max_score: 0 })], unknown).r1;
+  assert.equal(bad.finalized, false);
+  assert.ok(bad.errors[0].includes('__LATE__'), bad.errors[0]);
+});

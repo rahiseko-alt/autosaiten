@@ -32,6 +32,13 @@ var AUTHORING_LABELS = [
   ['フォームURL（学生に配る）', ''], ['合計点', ''], ['フォームのタイトル', ''], ['フォームの説明', '']
 ];
 var AUTHORING_HEADER_ROW = 10;
+/**
+ * 試験作成シートの上部の E・F 列。授業外の上限点と、クラスごとの授業の終わる日時の表（ADR 0013）。
+ * 「これでOK」のとき Settings の LATE_CAP と CLASS_END_<クラス> の行へ写す。定義の指紋には入れない。
+ */
+var AUTHORING_LATE = { LABEL_COL: 5, VALUE_COL: 6, CAP_ROW: 1, CLASS_HEADER_ROW: 3, CLASS_FIRST_ROW: 4, CLASS_LAST_ROW: 9 };
+var LATE_CAP_KEY = 'LATE_CAP';
+var CLASS_END_KEY_PREFIX = 'CLASS_END_';
 var AUTHORING_STATUS_LABELS = { IDLE: '待機中', VALIDATING: '確認中', BUILDING: 'フォーム作成中', READY: '準備完了', ERROR: 'エラー' };
 
 var SHEET_HEADERS = {
