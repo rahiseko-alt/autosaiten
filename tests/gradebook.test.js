@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  matchStudent, planImport, applyReviewDecisions, reviewRows, buildGradeTable, assignStudentIds, spreadsheetIdFromUrl
+  matchStudent, planImport, applyReviewDecisions, reviewRows, buildGradeTable, assignStudentIds, spreadsheetIdFromUrl,
+  planAliasAdditions, rosterForTest, templateProblems, newTestName
 } = require('../gradebook/Gradebook.js');
 
 const roster = [
@@ -221,4 +222,80 @@ test('スプレッドシートの URL から ID を取り出す', () => {
   assert.equal(spreadsheetIdFromUrl(id), id);
   assert.equal(spreadsheetIdFromUrl('https://example.com/'), '');
   assert.equal(spreadsheetIdFromUrl(''), '');
+});
+
+// --- 照合の結果を名簿の別名に残す ---
+
+test('先生が指定した学生の登録に無いアカウントと綴りを、別のアカウント・別の綴りに足す', () => {
+  const records = [{ 回答のアカウント: 'X@Example.com', 回答の氏名: 'Hanako Sato', この学生にする: 'S002' }];
+  assert.deepEqual(planAliasAdditions(records, roster), [
+    { 学生番号: 'S002', 別のアカウント: 'X@Example.com', 別の綴り: 'Hanako Sato' }
+  ]);
+});
+
+test('既にある別名には、|| 区切りで後ろに足す', () => {
+  const records = [{ 回答のアカウント: 'taro2@example.com', 回答の氏名: 'Taro Yamada', この学生にする: 'S001' }];
+  assert.deepEqual(planAliasAdditions(records, roster), [
+    { 学生番号: 'S001', 別のアカウント: 'taro.y@gmail.com||taro2@example.com', 別の綴り: 'Yamada Taro||山田太朗||Taro Yamada' }
+  ]);
+});
+
+test('本名・別名に既にあるもの（大文字小文字・全角・空白の違いを含む）は足さない', () => {
+  const records = [
+    { 回答のアカウント: 'TARO.Y@gmail.com', 回答の氏名: 'ｙａｍａｄａ　taro', この学生にする: 'S001' },
+    { 回答のアカウント: 'taro@example.com', 回答の氏名: '山田 太郎', この学生にする: 'S001' }
+  ];
+  assert.deepEqual(planAliasAdditions(records, roster), []);
+});
+
+test('同じ別名が何件の回答にあっても、1回だけ足す', () => {
+  const records = [
+    { 回答のアカウント: 'x@example.com', 回答の氏名: '', この学生にする: 'S002' },
+    { 回答のアカウント: 'X@example.com', 回答の氏名: '', この学生にする: 'S002' }
+  ];
+  assert.deepEqual(planAliasAdditions(records, roster), [
+    { 学生番号: 'S002', 別のアカウント: 'x@example.com', 別の綴り: '' }
+  ]);
+});
+
+test('先生が指定していない回答・名簿に無い学生番号の回答からは足さない', () => {
+  const records = [
+    { 回答のアカウント: 'x@example.com', 回答の氏名: '鈴木', 学生番号: 'S002', この学生にする: '' },
+    { 回答のアカウント: 'y@example.com', 回答の氏名: '田中', この学生にする: 'S999' }
+  ];
+  assert.deepEqual(planAliasAdditions(records, roster), []);
+});
+
+// --- 新しいテストを作る ---
+
+test('名簿の写しは、クラス・No.（学生番号）・氏名・呼び名（空欄）の行にする', () => {
+  assert.deepEqual(rosterForTest(roster.concat([{ 学生番号: '', 氏名: '', クラス: '国際' }])), [
+    ['国際', 'S001', '山田 太郎', ''],
+    ['総合', 'S002', '佐藤 花子', ''],
+    ['国際', 'S003', 'Kim Minji', '']
+  ]);
+});
+
+test('空のひな型には、止める理由が無い', () => {
+  assert.deepEqual(templateProblems({ results: [], queue: [], formMapping: [], settings: [{ key: 'COLLECT_EMAIL', value: true }] }), []);
+});
+
+test('ひな型に回答・待ち行列・フォームの記録・保管の印があれば、それぞれを理由に挙げる', () => {
+  const problems = templateProblems({
+    results: [{ response_id: 'r1' }, { response_id: 'r1' }], queue: [{ job_id: 'j1' }],
+    formMapping: [{ form_id: 'f1' }], settings: [{ key: 'ARCHIVED', value: true }]
+  });
+  assert.equal(problems.length, 4);
+  assert.match(problems[0], /Results/);
+  assert.match(problems[1], /Queue/);
+  assert.match(problems[2], /FormMapping/);
+  assert.match(problems[3], /ARCHIVED/);
+});
+
+test('ひな型にまだ無いシート（初期セットアップ前）は、空とみなす', () => {
+  assert.deepEqual(templateProblems({}), []);
+});
+
+test('新しいテストのファイル名は「科目 実施日 テスト名」', () => {
+  assert.equal(newTestName({ 科目: 'リテラシー', 実施日: '2026/11/6', テスト名: '第3回' }), 'リテラシー 2026-11-06 第3回');
 });

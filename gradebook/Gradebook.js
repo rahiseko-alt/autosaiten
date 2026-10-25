@@ -1,5 +1,5 @@
 /**
- * 集計表の判断（学生の照合、取り込みの計画、要確認の一覧、成績の一覧）。Apps Script の API には依存しない（ADR 0010）。
+ * 集計表の判断（学生の照合、取り込みの計画、要確認の一覧、成績の一覧、名簿の別名、新しいテストの用意）。Apps Script の API には依存しない（ADR 0010）。
  * 取り込み記録は「テストのID＋回答の番号」を一意キーにし、先生の判断（この学生にする・この回答を使う）を取り込み直しでも残す。
  */
 
@@ -13,6 +13,9 @@ var GB_SHEETS = {
     '学生番号', '理由', 'おすすめの学生', 'この学生にする', 'この回答を使う', '取り込み日時'],
   集計表の設定: ['項目', '値', '説明']
 };
+
+/** テスト側の名簿シートの見出し（src/Config.js の ROSTER_HEADERS と同じ）。 */
+var GB_TEST_ROSTER_HEADERS = ['クラス', 'No.', '氏名', '呼び名'];
 
 var GB_SETTINGS = [
   ['ひな型のID', '', '新しいテストを作るときにコピーするひな型のスプレッドシートの ID'],
@@ -222,9 +225,7 @@ function buildGradeTable(records, roster, tests) {
   var cols = tests.filter(function (t) { return gbText_(t.スプレッドシートのID) !== ''; });
   var byTest = {};
   records.forEach(function (r) { (byTest[gbText_(r.テストのID)] = byTest[gbText_(r.テストのID)] || []).push(r); });
-  var header = ['学生番号', '氏名', 'クラス'].concat(cols.map(function (t) {
-    return [gbText_(t.科目), gbDate_(t.実施日), gbText_(t.テスト名)].filter(function (s) { return s !== ''; }).join(' ');
-  }));
+  var header = ['学生番号', '氏名', 'クラス'].concat(cols.map(newTestName));
   var notice = [GB_GRADES_NOTICE].concat(header.slice(1).map(function () { return ''; }));
   var body = roster.filter(function (s) { return gbText_(s.学生番号) !== ''; }).map(function (s) {
     var id = gbText_(s.学生番号);
@@ -264,6 +265,80 @@ function assignStudentIds(rows, knownIds) {
   });
 }
 
+/**
+ * 先生が「この学生にする」で結びつけた回答のアカウント・氏名のうち、その学生の登録（本名・別名）に無いものを、
+ * 別のアカウント・別の綴りに足す計画。比べ方は照合と同じ。|| 区切りで後ろに足し、同じものは1回だけ足す。
+ * @param {Object[]} records 取り込み記録
+ * @param {Object[]} roster 名簿の行（学生番号が振られたもの）
+ * @return {{学生番号: string, 別のアカウント: string, 別の綴り: string}[]} 書き換える学生だけ（名簿の順）
+ */
+function planAliasAdditions(records, roster) {
+  var plans = {};
+  roster.forEach(function (s) {
+    var id = gbText_(s.学生番号);
+    if (id === '') return;
+    plans[id] = {
+      emails: gbAliases_(s.別のアカウント), names: gbAliases_(s.別の綴り), changed: false,
+      emailKeys: [s.アカウント].concat(gbAliases_(s.別のアカウント)).map(gbEmail_),
+      nameKeys: [s.氏名].concat(gbAliases_(s.別の綴り)).map(gbName_)
+    };
+  });
+  records.forEach(function (r) {
+    var plan = plans[gbText_(r.この学生にする)];
+    if (!plan) return;
+    var email = gbText_(r.回答のアカウント);
+    if (email !== '' && plan.emailKeys.indexOf(gbEmail_(email)) < 0) {
+      plan.emails.push(email);
+      plan.emailKeys.push(gbEmail_(email));
+      plan.changed = true;
+    }
+    var name = gbText_(r.回答の氏名);
+    if (name !== '' && plan.nameKeys.indexOf(gbName_(name)) < 0) {
+      plan.names.push(name);
+      plan.nameKeys.push(gbName_(name));
+      plan.changed = true;
+    }
+  });
+  return roster.filter(function (s) {
+    var plan = plans[gbText_(s.学生番号)];
+    return plan && plan.changed;
+  }).map(function (s) {
+    var plan = plans[gbText_(s.学生番号)];
+    return { 学生番号: gbText_(s.学生番号), 別のアカウント: plan.emails.join('||'), 別の綴り: plan.names.join('||') };
+  });
+}
+
+/** 集計表の名簿を、テストの名簿シート（クラス・No.・氏名・呼び名）に写す行にする。No. は学生番号、呼び名は空欄。 */
+function rosterForTest(roster) {
+  return roster.filter(function (s) {
+    return gbText_(s.学生番号) !== '' && gbText_(s.氏名) !== '';
+  }).map(function (s) {
+    return [gbText_(s.クラス), gbText_(s.学生番号), gbText_(s.氏名), ''];
+  });
+}
+
+/**
+ * ひな型が空か（前のテストの記録を引き継がないか）を確かめ、コピーを止める理由の一覧を返す。空なら []。
+ * まだ無いシート（初期セットアップ前のひな型）は空とみなす。
+ * @param {{results: Object[], queue: Object[], formMapping: Object[], settings: Object[]}} template 各シートの見出し以外の行
+ * @return {string[]}
+ */
+function templateProblems(template) {
+  var problems = [];
+  var count = function (rows) { return (rows || []).length; };
+  if (count(template.results) > 0) problems.push('Results に回答の行が' + count(template.results) + '行あります');
+  if (count(template.queue) > 0) problems.push('Queue に待ち行列の行が' + count(template.queue) + '行あります');
+  if (count(template.formMapping) > 0) problems.push('FormMapping にフォームの記録が' + count(template.formMapping) + '行あります');
+  var archived = (template.settings || []).some(function (r) { return gbText_(r.key) === 'ARCHIVED'; });
+  if (archived) problems.push('Settings に保管の印（ARCHIVED）があります');
+  return problems;
+}
+
+/** 新しいテストのスプレッドシートの名前（「科目 実施日 テスト名」。成績の列の見出しと同じ形）。 */
+function newTestName(test) {
+  return [gbText_(test.科目), gbDate_(test.実施日), gbText_(test.テスト名)].filter(function (s) { return s !== ''; }).join(' ');
+}
+
 /** スプレッドシートの URL（または ID そのもの）から ID を取り出す。取り出せなければ ''。 */
 function spreadsheetIdFromUrl(v) {
   var s = gbText_(v);
@@ -274,8 +349,10 @@ function spreadsheetIdFromUrl(v) {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    GB_SHEETS: GB_SHEETS, GB_SETTINGS: GB_SETTINGS, GB_GRADES_NOTICE: GB_GRADES_NOTICE,
+    GB_SHEETS: GB_SHEETS, GB_SETTINGS: GB_SETTINGS, GB_GRADES_NOTICE: GB_GRADES_NOTICE, GB_TEST_ROSTER_HEADERS: GB_TEST_ROSTER_HEADERS,
     matchStudent: matchStudent, planImport: planImport, reviewRows: reviewRows, applyReviewDecisions: applyReviewDecisions,
-    buildGradeTable: buildGradeTable, assignStudentIds: assignStudentIds, spreadsheetIdFromUrl: spreadsheetIdFromUrl
+    buildGradeTable: buildGradeTable, assignStudentIds: assignStudentIds, spreadsheetIdFromUrl: spreadsheetIdFromUrl,
+    planAliasAdditions: planAliasAdditions, rosterForTest: rosterForTest, templateProblems: templateProblems,
+    newTestName: newTestName
   };
 }

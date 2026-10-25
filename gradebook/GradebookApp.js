@@ -3,6 +3,7 @@
  *
  * 採点の仕組み（src/）・受付ページ（reception/）とは別のプロジェクト。採点の仕組みの関数は呼ばず、
  * 各テストのスプレッドシートは ID で開いて Queue と Results を読むだけにする（ADR 0010）。
+ * 新しいテストは、ひな型をドライブでコピーし、名簿シートだけを書き込む。
  */
 
 var GB_SHEET_ORDER_ = ['名簿', 'テスト一覧', '成績', '要確認', '取り込み記録', '集計表の設定'];
@@ -12,6 +13,7 @@ var GB_CHECKBOX_ROWS_ = 500;
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('集計表')
     .addItem('初期セットアップ', 'setupGradebook')
+    .addItem('新しいテストを作る', 'createNewTest')
     .addItem('取り込む', 'importTests')
     .addToUi();
 }
@@ -23,6 +25,78 @@ function setupGradebook() {
     gbAssignStudentIds_();
   });
   SpreadsheetApp.getUi().alert('初期セットアップが終わりました。名簿とテスト一覧を埋めてから「取り込む」を押してください');
+}
+
+/**
+ * ひな型をコピーして新しいテストを作る。テスト名・科目・実施日を順に聞き、ひな型が空であることを確かめてから、
+ * 新しいテストのフォルダへコピーし、名簿を写して、テスト一覧に1行足す。採点の仕組みの初期セットアップは先生が押す。
+ */
+function createNewTest() {
+  var ui = SpreadsheetApp.getUi();
+  var test = {};
+  var asks = [['テスト名', '例: 第3回 小テスト'], ['科目', '例: リテラシー・マーケティング・AI演習'], ['実施日', '例: 2026/11/6']];
+  for (var i = 0; i < asks.length; i++) {
+    var answer = ui.prompt('新しいテストを作る（' + (i + 1) + '/' + asks.length + '）', asks[i][0] + 'を入れてください。' + asks[i][1],
+      ui.ButtonSet.OK_CANCEL);
+    if (answer.getSelectedButton() !== ui.Button.OK) return;
+    test[asks[i][0]] = answer.getResponseText().trim();
+    if (test[asks[i][0]] === '') {
+      ui.alert(asks[i][0] + 'が空です。もう一度「新しいテストを作る」を押してください');
+      return;
+    }
+  }
+  test.実施日 = gbDate_(test.実施日);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(test.実施日)) {
+    ui.alert('実施日を日付として読めません。2026/11/6 のように入れてください');
+    return;
+  }
+
+  var message;
+  gbWithLock_(function () {
+    gbEnsureSheets_();
+    var settings = {};
+    gbReadTable_('集計表の設定').rows.forEach(function (r) { settings[gbText_(r.項目)] = gbText_(r.値); });
+    var templateId = spreadsheetIdFromUrl(settings['ひな型のID']);
+    var folderId = settings['新しいテストのフォルダのID'];
+    if (templateId === '' || folderId === '') {
+      message = '集計表の設定（隠してあるシート）に、ひな型のIDと新しいテストのフォルダのIDを入れてください';
+      return;
+    }
+    var template = SpreadsheetApp.openById(templateId);
+    var problems = templateProblems({
+      results: gbReadTable_('Results', template).rows, queue: gbReadTable_('Queue', template).rows,
+      formMapping: gbReadTable_('FormMapping', template).rows, settings: gbReadTable_('Settings', template).rows
+    });
+    if (problems.length > 0) {
+      message = 'ひな型が空ではないので、コピーを止めました（前のテストの記録を引き継ぐため）。\n' + problems.join('\n');
+      return;
+    }
+
+    var file = DriveApp.getFileById(templateId).makeCopy(newTestName(test), DriveApp.getFolderById(folderId));
+    var copy = SpreadsheetApp.openById(file.getId());
+    gbWriteTestRoster_(copy, rosterForTest(gbAssignStudentIds_()));
+
+    var list = gbReadTable_('テスト一覧');
+    var row = { テスト名: test.テスト名, 科目: test.科目, 実施日: test.実施日, スプレッドシートのURL: copy.getUrl(),
+      受付ページを使う: false, 実施中: false, スプレッドシートのID: copy.getId() };
+    list.sheet.appendRow(list.headers.map(function (h) { return row[h] === undefined ? '' : row[h]; }));
+    message = '新しいテスト「' + newTestName(test) + '」を作りました。\n' +
+      '新しいスプレッドシートを開き、メニュー AI Grader の初期セットアップを押してください。\n' + copy.getUrl();
+  });
+  ui.alert(message);
+}
+
+/** テストの名簿シートの見出しの下を消して、集計表の名簿で書き直す。見出しが無ければ置く。 */
+function gbWriteTestRoster_(ss, rows) {
+  var sheet = ss.getSheetByName('名簿') || ss.insertSheet('名簿');
+  var width = GB_TEST_ROSTER_HEADERS.length;
+  if (sheet.getLastRow() === 0) sheet.getRange(1, 1, 1, width).setValues([GB_TEST_ROSTER_HEADERS]);
+  var headers = sheet.getRange(1, 1, 1, width).getValues()[0].map(gbText_);
+  if (headers.join('\n') !== GB_TEST_ROSTER_HEADERS.join('\n')) {
+    throw new Error('新しいテストの名簿シートの見出しが「' + GB_TEST_ROSTER_HEADERS.join('・') + '」ではありません');
+  }
+  if (sheet.getLastRow() > 1) sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).clearContent();
+  if (rows.length > 0) sheet.getRange(2, 1, rows.length, width).setValues(rows);
 }
 
 /**
@@ -63,6 +137,7 @@ function importTests() {
       count += 1;
     });
     gbWriteRows_('取り込み記録', records);
+    gbAddAliases_(records);
     gbWriteRows_('要確認', reviewRows(records, tests));
     gbCheckboxes_('要確認', 'この回答を使う');
     gbWriteGrades_(buildGradeTable(records, roster, tests));
@@ -119,6 +194,19 @@ function gbAssignStudentIds_() {
     r.学生番号 = ids[i];
   });
   return table.rows;
+}
+
+/** 先生が「この学生にする」で結びつけた回答のアカウント・氏名を、名簿の別のアカウント・別の綴りに足す。 */
+function gbAddAliases_(records) {
+  var table = gbReadTable_('名簿');
+  var additions = {};
+  planAliasAdditions(records, table.rows).forEach(function (a) { additions[a.学生番号] = a; });
+  table.rows.forEach(function (r, i) {
+    var a = additions[gbText_(r.学生番号)];
+    if (!a) return;
+    if (gbText_(r.別のアカウント) !== a.別のアカウント) gbSetCell_(table, i, '別のアカウント', a.別のアカウント);
+    if (gbText_(r.別の綴り) !== a.別の綴り) gbSetCell_(table, i, '別の綴り', a.別の綴り);
+  });
 }
 
 /** 見出しの行を読み、行をオブジェクトにする。行の位置（何行目か）も覚えておく。空の行は飛ばす。 */
