@@ -127,7 +127,7 @@ function requireVerifiedEmail_(form, settings) {
   if (res && res.getResponseCode() === 200) return;
   fbVerifiedEmailFailed_ = true;
   writeLog('WARN', 'VERIFIED_EMAIL_FAILED', form.getId(), 'メールアドレスの収集を「確認済み」にできませんでした',
-    { status: res ? res.getResponseCode() : 'error' });
+    { status: res ? res.getResponseCode() : 'error', body: res ? String(res.getContentText()).slice(0, 300) : '' });
 }
 
 function fbIsTrue_(value) {
@@ -140,7 +140,10 @@ function populateForm_(form, spec, version) {
   form.setIsQuiz(true);
   // 他の学生の回答が見えないよう、「回答の概要を表示する」は常にオフ（ADR 0011）
   form.setPublishingSummary(false);
-  form.setCollectEmail(spec.collectEmail);
+  // 先生のアカウントの初期設定で既に集める設定（「確認済み」など）なら触らない。
+  // setCollectEmail(true) は「回答者からの入力」に切り替えてしまうため、集めていないときだけ呼ぶ（ADR 0011）
+  if (!spec.collectEmail) form.setCollectEmail(false);
+  else if (!form.collectsEmail()) form.setCollectEmail(true);
   form.setAllowResponseEdits(false);
   form.setLimitOneResponsePerUser(spec.limitOneResponse);
   form.setAcceptingResponses(true);
