@@ -4,6 +4,26 @@ handover.md の保存上限（5 件）を超えて押し出された古いメモ
 会話開始時には読み込まれない。過去の経緯を掘り返すときだけ開く。新しいものを一番上に来るよう足す。
 
 ---
+## 2026-10-25 ひな型と集計表を作り、仕組みを送り込んだ
+
+**決めたこと**
+
+- ひな型: スプレッドシート「AI Grader ひな型」 https://docs.google.com/spreadsheets/d/1sIXeKAAjcbIiyXwMpwc3jKDnV5ZmWegNXYM8VNusoOk/edit （スクリプト ID `1qjakq063AvU1fwkCnQnG0DZTJ984qAAUC4Pv44GVWBtYZuqCzMGmrv2N`）。ひな型では初期セットアップを押さない
+- 集計表: スプレッドシート「AI Grader 集計表」 https://docs.google.com/spreadsheets/d/1p6N-6NiI4vqrXdkqoSgVVcWBkqthgIKD0TEiTdldBeQ/edit （スクリプト ID `1uIFn9udPWKZAHIpkKG_xfcbS3zfwdl6RAFnGxdHgBuVW0LDGnPdLgQ0o`）。初期セットアップ済み
+- フォルダ: 「AI Grader テスト」`1dL1BaDO3TZ018T8CZkorIqeYw7PHMClV`、「AI Grader 保管」`1nTMj_lqUpNLnvdnFZIF4XUycrWE0QpSB`。集計表の設定に入れた
+- 利用者のパソコンでは `C:\Users\user\autosaiten-new\autosaiten-main` に最新を置き、ルートの `.clasp.json`（ひな型宛て、rootDir src）と `gradebook\.clasp.json`（集計表宛て）を作って `clasp push -f` した。10/23 の本番（スクリプト ID `11ApnoLf…`）には送っていない
+- 集計表の名簿に、本番の名簿の60名（氏名・クラス）を写した。アカウントは空欄。テスト一覧に10/23 のテスト（第1回 リテラシー）を登録した
+
+**次にやること**
+
+- 試しのテストで実機の確かめ（#56）: 集計表の「新しいテストを作る」→ 初期セットアップ → 問題1つ → これでOK → 回答 → 採点 → 手動採点を反映 → 氏名欄に合計点と講評が入るか
+- 名簿のアカウントを埋める（Classroom の受講者アカウント）
+- 10/23 の採点ファイルを受け取り、本番に反映して返却用の一覧を作る
+
+**未解決の問題**
+
+- 名簿の書き写しは利用者の確認待ちのまま（本番の名簿をそのまま写した）
+
 ## 2026-10-25 集計表・合計点だけのフォーム・授業外の上限点・保管を取り込んだ
 
 **決めたこと**
