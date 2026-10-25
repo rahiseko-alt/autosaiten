@@ -797,3 +797,13 @@ test('「確認済み」にできなければ、止めずに先生へ手で直�
   assert.equal(control(env, 'STATUS'), 'READY');
   assert.ok(String(control(env, 'MESSAGE')).includes('「メールアドレスを収集する」を「確認済み」にしてください'), control(env, 'MESSAGE'));
 });
+
+test('先生の初期設定で既にメールを集めるフォームなら、setCollectEmail で上書きしない（「確認済み」が「回答者からの入力」に変わらない）', () => {
+  const env = prepare();
+  const origCreate = env.ctx.FormApp.create;
+  env.ctx.FormApp.create = (title) => { const f = origCreate(title); f.collectEmail = 'VERIFIED'; return f; };
+  pressOk(env);
+  const form = Object.values(env.forms)[0];
+  assert.equal(form.collectEmail, 'VERIFIED');
+  assert.equal(form.collectEmailCalls || 0, 0);
+});

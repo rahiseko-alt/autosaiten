@@ -154,7 +154,8 @@ class FakeForm {
   submit(answersByTitle) { const r = new FakeResponse(this, 'resp' + (this.responses.length + 1), answersByTitle); this.responses.push(r); return r; }
 }
 FakeForm.prototype.setLimitOneResponsePerUser = function (v) { this.limitOne = v; return this; };
-FakeForm.prototype.setCollectEmail = function (v) { this.collectEmail = v; return this; };
+FakeForm.prototype.setCollectEmail = function (v) { this.collectEmail = v; this.collectEmailCalls = (this.collectEmailCalls || 0) + 1; return this; };
+FakeForm.prototype.collectsEmail = function () { return !!this.collectEmail; };
 FakeForm.prototype.setPublishingSummary = function (v) { this.publishingSummary = v; return this; };
 ['setTitle', 'setDescription', 'setIsQuiz', 'setAllowResponseEdits', 'setDestination'].forEach((m) => {
   FakeForm.prototype[m] = function () { return this; };
