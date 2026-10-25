@@ -2,7 +2,8 @@
  * Control シートの「これでOK」。検証 -> フォーム生成 -> 表示更新 を一度に実行する。
  */
 
-var PUBLISH_GRADES_GUIDE = 'フォームの設定で、成績の公開を『後で手動で公開』にしてください（確定前の点数が学生に見えないように）';
+var PUBLISH_GRADES_GUIDE = 'フォームの設定で、「成績の発表」を「確認後に手動で表示する」にし、「回答者の設定」の「点数」をオンにしてください（確定前の点数が見えず、返却後は合計点が見えるように）';
+var VERIFIED_EMAIL_GUIDE = 'メールアドレスの収集を「確認済み」にできませんでした。フォームの設定の「回答」で、「メールアドレスを収集する」を「確認済み」にしてください';
 
 function handleControlEdit(e) {
   if (!e || !e.range) return;
@@ -65,6 +66,7 @@ function runBuildFlow_() {
     var message = '準備ができました。フォームURLを学生に配ってください';
     // 成績の公開の設定は仕組みから変えられないので、新しいフォームのたびに先生に頼む（ADR 0013）
     if (action === 'CREATE' || action === 'NEW_VERSION') message += '\n' + PUBLISH_GRADES_GUIDE;
+    if (fbVerifiedEmailFailed_) message += '\n' + VERIFIED_EMAIL_GUIDE;
     setControl('MESSAGE', message);
     writeLog('INFO', 'BUILD_COMPLETED', '', 'フォーム生成が完了しました');
   } catch (err) {

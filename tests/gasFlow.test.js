@@ -430,7 +430,7 @@ test('「回答の概要を表示する」は、フォームの作成と同期�
 });
 
 test('新しいフォーム・新しい版を作ったときだけ、成績の公開を手動にする案内が出る', () => {
-  const guide = 'フォームの設定で、成績の公開を『後で手動で公開』にしてください';
+  const guide = '「成績の発表」を「確認後に手動で表示する」にし、「回答者の設定」の「点数」をオンにしてください';
   const env = prepare();
   pressOk(env);
   assert.ok(String(control(env, 'MESSAGE')).includes(guide), control(env, 'MESSAGE'));
@@ -748,3 +748,22 @@ function prepareRows(env) {
   fillAuthoring(env, [A('日本の首都は？', '短答', 5, '東京', '東京都')]);
   return env;
 }
+
+test('メールアドレスを集める設定なら、フォームのメールの収集を Forms API で「確認済み」にする', () => {
+  const calls = [];
+  const env = prepare({ fetch: (url, opt) => { calls.push({ url, body: JSON.parse(opt.payload) }); return { getResponseCode: () => 200, getContentText: () => '{}' }; } });
+  pressOk(env);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /^https:\/\/forms\.googleapis\.com\/v1\/forms\/.+:batchUpdate$/);
+  assert.deepEqual(calls[0].body.requests[0].updateSettings, { settings: { emailCollectionType: 'VERIFIED' }, updateMask: 'emailCollectionType' });
+  assert.ok(!String(control(env, 'MESSAGE')).includes('確認済み」にできませんでした'), control(env, 'MESSAGE'));
+  pressOk(env); // 押し直しても、手で変えられた設定を戻す
+  assert.equal(calls.length, 2);
+});
+
+test('「確認済み」にできなければ、止めずに先生へ手で直す案内を出す', () => {
+  const env = prepare({ fetch: () => ({ getResponseCode: () => 403, getContentText: () => '' }) });
+  pressOk(env);
+  assert.equal(control(env, 'STATUS'), 'READY');
+  assert.ok(String(control(env, 'MESSAGE')).includes('「メールアドレスを収集する」を「確認済み」にしてください'), control(env, 'MESSAGE'));
+});

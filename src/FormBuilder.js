@@ -7,6 +7,9 @@ var PROP_ACTIVE_FORM_ID = 'ACTIVE_FORM_ID';
 var PROP_FORM_VERSION = 'FORM_VERSION';
 var PROP_DEFINITION_HASH = 'DEFINITION_HASH';
 
+/** 直前の buildOrVersionForm で、メールアドレスの収集を「確認済み」にできなかったか。Control が案内に使う。 */
+var fbVerifiedEmailFailed_ = false;
+
 /** @return {'CREATE'|'NOOP'|'SYNC'|'NEW_VERSION'} 行ったこと */
 function buildOrVersionForm() {
   var props = PropertiesService.getDocumentProperties();
@@ -33,9 +36,11 @@ function buildOrVersionForm() {
     sameDefinition: props.getProperty(PROP_DEFINITION_HASH) === hash
   });
 
+  fbVerifiedEmailFailed_ = false;
   if (action === 'NOOP') {
     // 手で「回答の概要を表示する」をオンにされても、押し直せば戻る（ADR 0011）
     form.setPublishingSummary(false);
+    requireVerifiedEmail_(form, settings);
     syncClassChoices_(form, version, classes);
     showFormInfo_(form, version);
     return action;
@@ -56,6 +61,7 @@ function buildOrVersionForm() {
   }
 
   populateForm_(form, spec, version);
+  requireVerifiedEmail_(form, settings);
   props.setProperty(PROP_ACTIVE_FORM_ID, form.getId());
   props.setProperty(PROP_FORM_VERSION, String(version));
   props.setProperty(PROP_DEFINITION_HASH, hash);
@@ -95,6 +101,33 @@ function rosterClasses_() {
     if (c !== '' && !seen[c]) { seen[c] = true; out.push(c); }
   });
   return out;
+}
+
+/**
+ * メールアドレスの収集を「確認済み」（ログイン中のアカウントが自動で入る）にする。
+ * FormApp の setCollectEmail(true) では「回答者からの入力」になり、照合に使えないため、Forms API で指定する（ADR 0011）。
+ * 失敗しても止めず、先生に手で直してもらう案内を出す。
+ */
+function requireVerifiedEmail_(form, settings) {
+  if (!fbIsTrue_(settings.COLLECT_EMAIL)) return;
+  var res;
+  try {
+    res = UrlFetchApp.fetch('https://forms.googleapis.com/v1/forms/' + form.getId() + ':batchUpdate', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+      payload: JSON.stringify({ requests: [{ updateSettings: {
+        settings: { emailCollectionType: 'VERIFIED' }, updateMask: 'emailCollectionType'
+      } }] }),
+      muteHttpExceptions: true
+    });
+  } catch (e) {
+    res = null;
+  }
+  if (res && res.getResponseCode() === 200) return;
+  fbVerifiedEmailFailed_ = true;
+  writeLog('WARN', 'VERIFIED_EMAIL_FAILED', form.getId(), 'メールアドレスの収集を「確認済み」にできませんでした',
+    { status: res ? res.getResponseCode() : 'error' });
 }
 
 function fbIsTrue_(value) {

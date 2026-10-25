@@ -2,10 +2,14 @@
   "timeZone": "Asia/Tokyo",
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
-  "urlFetchWhitelist": ["https://api.anthropic.com/"],
+  "urlFetchWhitelist": [
+    "https://api.anthropic.com/",
+    "https://forms.googleapis.com/"
+  ],
   "oauthScopes": [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/forms",
+    "https://www.googleapis.com/auth/forms.body",
     "https://www.googleapis.com/auth/script.external_request",
     "https://www.googleapis.com/auth/script.scriptapp",
     "https://www.googleapis.com/auth/script.container.ui"
