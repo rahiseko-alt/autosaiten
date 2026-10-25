@@ -275,6 +275,33 @@ test('名簿が空から埋まると氏名欄の形が変わるので、回答�
   assert.ok(String(control(env, 'MESSAGE')).includes('氏名欄の形'), control(env, 'MESSAGE'));
 });
 
+test('従来のクラス欄があるフォームでは、選んだクラスと名簿のクラスが違う授業外の提出は、今までどおり要確認になる', () => {
+  const env = prepare();
+  putRoster(env, [['国際', 1, '', ''], ['総合', 2, '', '']]); // 氏名が空なので、クラス欄のあるフォームになる
+  pressOk(env);
+  const a = env.ss.getSheetByName('試験作成');
+  a.put(1, 6, 6); a.put(4, 6, ENDED); a.put(5, 6, LATER);
+  pressOk(env);
+  assert.equal(env.forms.form1.items.filter((i) => i.title.indexOf('クラス') === 0).length, 1);
+  putRoster(env, [['国際', 1, '山田', ''], ['総合', 2, 'Kim', '']]); // 押し直さないので、フォームはクラス欄のまま
+  env.forms.form1.submit({ [RESULT]: '確認しました', '氏名（Name）': '山田', 'クラス（Class）': '総合', '日本の首都は？': '東京', '4PのPriceを選べ': 'Price' });
+  env.ctx.processGradingQueue();
+  assert.equal(lateOf(env)[0].status, 'REVIEW_REQUIRED');
+  assert.equal(env.forms.form1.submitted.length, 0);
+});
+
+test('氏名欄の形の記録が無い（この仕組みの前に作った）フォームでも、形が変わったときの案内が出る', () => {
+  const env = prepare();
+  pressOk(env);
+  env.props.document.NAME_MODE = undefined;
+  delete env.props.document.NAME_MODE;
+  env.forms.form1.submit({ '日本の首都は？': '東京' });
+  putRoster(env, [['国際', 1, 'A', ''], ['総合', 2, 'B', '']]);
+  pressOk(env);
+  assert.equal(control(env, 'FORM_VERSION'), 2);
+  assert.ok(String(control(env, 'MESSAGE')).includes('氏名欄の形'), control(env, 'MESSAGE'));
+});
+
 test('システム診断は、フォームに届いているのに待ち行列に登録されていない回答を知らせる', () => {
   const env = prepare();
   pressOk(env);

@@ -55,7 +55,7 @@ function buildOrVersionForm() {
   }
   var spec = buildFormSpec(questions, settings, classes, names);
   // 名簿が空から埋まった（または空になった）ときは氏名欄の形が変わる。回答があれば新しい版になるので、案内に使う
-  var previousMode = props.getProperty(PROP_NAME_MODE);
+  var previousMode = props.getProperty(PROP_NAME_MODE) || currentNameMode_(form, version);
   if (action === 'NEW_VERSION' && previousMode && previousMode !== nameMode) fbNameModeChanged_ = true;
 
   var oldForm = null;
@@ -129,6 +129,17 @@ function rosterNameErrors_() {
   if (dup.length === 0) return [];
   return ['・名簿に同じ氏名の人がいます（' + dup.map(function (n) { return '「' + n + '」'; }).join('、') +
     '）。プルダウンで見分けられるよう、名簿の氏名を直してから（例「山田 太郎（2）」）、もう一度「これでOK」を押してください。'];
+}
+
+/** 今のフォームの氏名欄の形（'DROPDOWN'／'TEXT'）。記録が無い（この仕組みの前に作った）フォームの案内に使う。フォームが無ければ空。 */
+function currentNameMode_(form, version) {
+  if (!form) return '';
+  var mapped = readTable(SHEET_NAMES.FORM_MAPPING).filter(function (r) {
+    return Number(r.form_version) === version && r.question_id === NAME_QUESTION_ID;
+  })[0];
+  var item = mapped ? form.getItemById(Number(mapped.form_item_id)) : null;
+  if (!item) return '';
+  return item.getType() === FormApp.ItemType.LIST ? 'DROPDOWN' : 'TEXT';
 }
 
 /** 名簿シートのクラスを、出てきた順に重複なく返す。名簿が無ければ空。 */

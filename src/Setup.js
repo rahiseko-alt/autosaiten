@@ -46,7 +46,7 @@ function forgetForeignForm_() {
   if (!formId) return;
   var known = readTable(SHEET_NAMES.FORM_MAPPING).some(function (m) { return m.form_id === formId; });
   if (known) return;
-  [PROP_ACTIVE_FORM_ID, PROP_FORM_VERSION, PROP_DEFINITION_HASH].forEach(function (k) { props.deleteProperty(k); });
+  [PROP_ACTIVE_FORM_ID, PROP_FORM_VERSION, PROP_DEFINITION_HASH, PROP_NAME_MODE].forEach(function (k) { props.deleteProperty(k); });
   writeLog('INFO', 'FOREIGN_FORM_FORGOTTEN', formId, 'この表に記録の無いフォーム（コピー元のもの）の記録を消しました');
 }
 

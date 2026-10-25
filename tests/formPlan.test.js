@@ -128,6 +128,7 @@ test('配点を変えると、定義の指紋も変わる（採点結果の欄�
 
 const { rosterNameChoices, findDuplicateNames, sameChoices } = require('../src/FormPlan.js');
 const { planLateRow } = require('../src/LateCap.js');
+const { fpNameKey_ } = require('../src/FormPlan.js');
 
 const rosterRows = [
   { クラス: '国際', 氏名: '山田 太郎' }, { クラス: '国際', 氏名: ' Kim  ' },
@@ -192,4 +193,17 @@ test('指紋: 名簿の中身が変わっても変わらず、プルダウンか
   const a = definitionHash(qs, settings, ['国際'], ['山田 太郎', 'Kim']);
   assert.equal(a, definitionHash(qs, settings, ['国際', '総合'], ['山田 太郎', 'Kim', '佐藤 花子']));
   assert.notEqual(a, definitionHash(qs, settings, ['国際']));
+});
+
+test('氏名の比べ方: FormPlan と LateCap と集計表で、同じ氏名の表の結果が一致する', () => {
+  const samples = ['山田 太郎', '山田\u3000太郎', ' 山田  太郎 ', 'ＫＩＭ  Lee', 'kim lee', 'KIM\tLEE', 'Ｓａｔｏ', 'sato', '', '   ', 'Ünal'];
+  const groups = samples.map((v) => fpNameKey_(v));
+  // 同じ氏名とみなすものが、LateCap の氏名の比べ方で名簿を引けるかと一致する
+  samples.forEach((a, i) => samples.forEach((b, j) => {
+    const roster = [{ クラス: '国際', 氏名: a }];
+    const row = { response_id: 'r', form_version: 1, submitted_at: new Date('2026-10-20T11:00:00Z'), respondent_email: '', question_id: 'Q', question_text_snapshot: '', final_score: 9, max_score: 10, status: 'AUTO_GRADED', manual_score: '', respondent_name: b, respondent_class: '' };
+    const late = planLateRow({ rows: [row], cap: 4, classEnds: { 国際: new Date('2026-10-20T10:30:00Z') }, roster, now: new Date() });
+    const found = late && late.status === 'AUTO_GRADED';
+    assert.equal(found, groups[i] !== '' && groups[i] === groups[j], JSON.stringify([a, b]));
+  }));
 });
