@@ -12,10 +12,16 @@ function processGradingQueue() {
   var start = Date.now();
   try {
     var settings = readSettings();
-    ingestNewResponses_();
+    var archived = isArchived(settings);
+    // 保管したテストのフォームは集計表が閉じているので、新しい回答は拾わない
+    if (!archived) ingestNewResponses_();
     recoverStaleJobs_();
 
     var jobs = readQueueRows_();
+    if (archived && !hasOpenJobs(jobs.map(function (j) { return j.job; }))) {
+      removeOwnTriggers_();
+      return;
+    }
     var runnable = pickRunnable(jobs.map(function (j) { return j.job; }), new Date(), Number(settings.WORKER_BATCH_SIZE) || 5);
     var rowOf = {};
     jobs.forEach(function (j) { rowOf[j.job.job_id] = j.rowIndex; });
@@ -29,6 +35,16 @@ function processGradingQueue() {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * 保管したテストの自動処理を止める。このプロジェクトのトリガーをすべて外し、
+ * 集計表が確かめられるよう Settings に TRIGGERS_REMOVED（日時）を書く。
+ */
+function removeOwnTriggers_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
+  setSetting(TRIGGERS_REMOVED_KEY, new Date());
+  writeLog('INFO', 'TRIGGERS_REMOVED', '', '保管済みのため、自動処理のトリガーを外しました');
 }
 
 function readQueueRows_() {
@@ -107,19 +123,26 @@ function runJob_(job, rowIndex, settings, force) {
   var outcome;
   try {
     var done = null;
+    var late = lateRules_();
     if (!force) {
       // 採点と保存は済んでいて、書き戻しだけが失敗していた場合は、LLM を呼び直さない。
       var existing = readResultsWithRows_().filter(function (r) { return r.response_id === job.response_id; });
-      var again = existing.length > 0 ? recomputeResponses(existing)[job.response_id] : null;
+      var again = existing.length > 0 ? recomputeResponses(existing, late)[job.response_id] : null;
       if (again && again.finalized) done = { rows: again.rows, finalized: true };
     }
     if (!done) {
       var lastAttempt = (Number(job.retry_count) || 0) + 1 >= QUEUE_MAX_RETRIES;
       var graded = gradeJob_(job, settings, { onProviderError: lastAttempt ? 'review' : 'throw' });
       var saved = saveResultRows(graded.rows);
-      var recomputed = recomputeResponses(saved)[job.response_id];
+      // 保存した行に、既にある __LATE__ の行（先生の manual_score を含む）を添えて決め直す
+      var lateKept = readResultsWithRows_().filter(function (r) {
+        return r.response_id === job.response_id && r.question_id === LATE_QUESTION_ID;
+      });
+      var recomputed = recomputeResponses(saved.concat(lateKept), late)[job.response_id];
       done = { rows: recomputed.rows, finalized: recomputed.finalized };
     }
+    // 授業外の上限は、結果を書く時点で毎回決め直す（不要になった行は消す）
+    saveLateRow_(job.response_id, done.rows);
     if (done.finalized) {
       writeBackScores(job.form_id, job.response_id, done.rows);
       outcome = { type: 'FINALIZED' };

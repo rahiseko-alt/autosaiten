@@ -53,4 +53,25 @@ function rosterByClass(rows) {
   return classes;
 }
 
-if (typeof module !== 'undefined') module.exports = { planAssignment: planAssignment, rosterByClass: rosterByClass };
+/** チェックの欄の値。true のほか、文字の TRUE も印とみなす。 */
+function rcChecked_(v) {
+  return v === true || rcText_(v).toUpperCase() === 'TRUE';
+}
+
+/**
+ * 受付ページの案内先を決める（ADR 0012）。集計表のテスト一覧で「受付ページを使う」と「実施中」の両方に
+ * 印の付いた行がちょうど1つのときだけ、そのテストのスプレッドシートの ID を返す。
+ * 0個・2個以上、または ID が空なら、どのテストへも案内しない。
+ * @param {Object[]} tests テスト一覧の行（受付ページを使う・実施中・スプレッドシートのID）
+ * @return {string} 案内先のスプレッドシートの ID
+ */
+function chooseReceptionTest(tests) {
+  var marked = tests.filter(function (r) { return rcChecked_(r.受付ページを使う) && rcChecked_(r.実施中); });
+  var id = marked.length === 1 ? rcText_(marked[0].スプレッドシートのID) : '';
+  if (id === '') throw new Error('受付の準備ができていません。先生に連絡してください');
+  return id;
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { planAssignment: planAssignment, rosterByClass: rosterByClass, chooseReceptionTest: chooseReceptionTest };
+}

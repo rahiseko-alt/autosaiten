@@ -106,8 +106,8 @@ class FakeItem {
   createChoice(value, correct) { return { value, correct, getValue() { return value; } }; }
   getChoices() { return this.choices.slice(); }
   asMultipleChoiceItem() { return this; }
-  setFeedbackForCorrect() { return this; }
-  setFeedbackForIncorrect() { return this; }
+  setFeedbackForCorrect(f) { this.feedbackForCorrect = f; return this; }
+  setFeedbackForIncorrect(f) { this.feedbackForIncorrect = f; return this; }
 }
 
 class FakeResponse {
@@ -122,9 +122,12 @@ class FakeResponse {
   getGradableResponseForItem(item) {
     if (this.answersByTitle[item.title] === undefined) return null;
     const res = this;
-    return { item, score: null, setScore(s) { this.score = s; return this; } , res };
+    return {
+      item, score: null, feedback: null, res, getItem() { return item; },
+      setScore(s) { this.score = s; return this; }, setFeedback(f) { this.feedback = f; return this; }
+    };
   }
-  withItemGrade(ir) { this.grades.push({ item: ir.item, score: ir.score }); return this; }
+  withItemGrade(ir) { this.grades.push({ item: ir.item, score: ir.score, feedback: ir.feedback && ir.feedback.text }); return this; }
 }
 
 class FakeForm {
@@ -151,6 +154,7 @@ class FakeForm {
 }
 FakeForm.prototype.setLimitOneResponsePerUser = function (v) { this.limitOne = v; return this; };
 FakeForm.prototype.setCollectEmail = function (v) { this.collectEmail = v; return this; };
+FakeForm.prototype.setPublishingSummary = function (v) { this.publishingSummary = v; return this; };
 ['setTitle', 'setDescription', 'setIsQuiz', 'setAllowResponseEdits', 'setDestination'].forEach((m) => {
   FakeForm.prototype[m] = function () { return this; };
 });
@@ -161,7 +165,10 @@ function createGasContext(options) {
   const props = { document: {}, script: Object.assign({}, options && options.scriptProperties) };
   const triggers = [];
   let formCount = 0;
-  const propsApi = (store) => ({ getProperty: (k) => (k in store ? store[k] : null), setProperty: (k, v) => { store[k] = String(v); } });
+  const propsApi = (store) => ({
+    getProperty: (k) => (k in store ? store[k] : null), setProperty: (k, v) => { store[k] = String(v); },
+    deleteProperty: (k) => { delete store[k]; }
+  });
   const lock = { tryLock: () => true, releaseLock() {} };
   const triggerBuilder = (fn) => {
     const t = { fn, type: null, getHandlerFunction: () => fn };
@@ -183,7 +190,7 @@ function createGasContext(options) {
       DestinationType: { SPREADSHEET: 'SPREADSHEET' },
       create: (title) => { const f = new FakeForm('form' + (++formCount), title); forms[f.id] = f; return f; },
       openById: (id) => { if (!forms[id]) throw new Error('not found'); return forms[id]; },
-      createFeedback: () => ({ setText() { return this; }, build() { return {}; } })
+      createFeedback: () => ({ setText(t) { this.text = t; return this; }, build() { return { text: this.text, getText: () => this.text }; } })
     },
     PropertiesService: { getDocumentProperties: () => propsApi(props.document), getScriptProperties: () => propsApi(props.script) },
     LockService: { getDocumentLock: () => lock, getScriptLock: () => lock },

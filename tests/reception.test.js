@@ -45,3 +45,37 @@ test('名簿をクラスごとに、名簿の順のまま分ける', () => {
   ];
   assert.deepEqual(rosterByClass(rows), [{ name: '国際', students: ['A', 'B'] }, { name: '総合', students: ['C'] }]);
 });
+
+const { chooseReceptionTest } = require('../reception/Reception.js');
+
+const t = (useReception, active, id) => ({ 受付ページを使う: useReception, 実施中: active, スプレッドシートのID: id });
+const NOT_READY = /受付の準備ができていません。先生に連絡してください/;
+
+test('「受付ページを使う」と「実施中」の両方に印の付いた行がちょうど1つなら、そのテストへ案内する', () => {
+  const rows = [t(false, false, 'old-test-id'), t(true, true, 'now-test-id'), t(true, false, 'next-test-id')];
+  assert.equal(chooseReceptionTest(rows), 'now-test-id');
+});
+
+test('チェックの値は、true でも文字の TRUE でも印とみなす', () => {
+  assert.equal(chooseReceptionTest([t('TRUE', true, 'a-id'), t(false, 'TRUE', 'b-id')]), 'a-id');
+  assert.equal(chooseReceptionTest([t(true, 'TRUE', ' c-id ')]), 'c-id');
+});
+
+test('両方に印の付いた行が1つも無ければ、準備ができていないと知らせる', () => {
+  assert.throws(() => chooseReceptionTest([]), NOT_READY);
+  assert.throws(() => chooseReceptionTest([t(false, false, 'a-id')]), NOT_READY);
+});
+
+test('両方に印の付いた行が2つ以上あれば、どちらにも案内しない', () => {
+  assert.throws(() => chooseReceptionTest([t(true, true, 'a-id'), t(true, true, 'b-id')]), NOT_READY);
+});
+
+test('印が片方だけの行は案内先にしない', () => {
+  assert.throws(() => chooseReceptionTest([t(true, false, 'a-id'), t(false, true, 'b-id')]), NOT_READY);
+  assert.equal(chooseReceptionTest([t(true, false, 'a-id'), t(false, true, 'b-id'), t(true, true, 'c-id')]), 'c-id');
+});
+
+test('案内先の行のスプレッドシートのIDが空なら、準備ができていないと知らせる', () => {
+  assert.throws(() => chooseReceptionTest([t(true, true, '')]), NOT_READY);
+  assert.throws(() => chooseReceptionTest([t(true, true, undefined)]), NOT_READY);
+});

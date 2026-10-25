@@ -23,6 +23,12 @@ function readSettings() {
   return out;
 }
 
+/** 集計表の「保管する」で、Settings に保管の印（ARCHIVED が TRUE）が付いているか。 */
+function isArchived(settings) {
+  var v = settings[ARCHIVED_KEY];
+  return v === true || String(v).trim().toUpperCase() === 'TRUE';
+}
+
 function setControl(key, value) {
   var ss = SpreadsheetApp.getActive();
   ss.getSheetByName(SHEET_NAMES.CONTROL).getRange(CONTROL_CELLS[key]).setValue(value);

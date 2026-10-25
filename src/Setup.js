@@ -14,6 +14,7 @@ function setupSystem() {
   var first = ss.getSheetByName('Sheet1') || ss.getSheetByName('シート1');
   if (first && first.getLastRow() === 0 && ss.getSheets().length > order.length) ss.deleteSheet(first);
 
+  forgetForeignForm_();
   setupControl_(ss.getSheetByName(SHEET_NAMES.CONTROL));
   setupSettings_(ss.getSheetByName(SHEET_NAMES.SETTINGS));
   setupQuestionsValidation_(ss.getSheetByName(SHEET_NAMES.QUESTIONS));
@@ -32,6 +33,21 @@ function setupSystem() {
   installRequiredTriggers();
   writeLog('INFO', 'SETUP_COMPLETED', '', '初期セットアップが完了しました');
   ss.toast('初期セットアップが完了しました。API キーは Script Properties に別途設定してください。', 'AI Grader', 8);
+}
+
+/**
+ * ひな型や別のテストをコピーすると、Document Properties の現在のフォームの記録が写ることがある。
+ * そのフォームがこの表の FormMapping に無ければ、よそのフォームなので、同じ由来の版・定義の指紋ごと消す。
+ * 残すと「これでOK」がコピー元のフォームを書き換え、定期処理がその回答を取り込んでしまう。
+ */
+function forgetForeignForm_() {
+  var props = PropertiesService.getDocumentProperties();
+  var formId = props.getProperty(PROP_ACTIVE_FORM_ID);
+  if (!formId) return;
+  var known = readTable(SHEET_NAMES.FORM_MAPPING).some(function (m) { return m.form_id === formId; });
+  if (known) return;
+  [PROP_ACTIVE_FORM_ID, PROP_FORM_VERSION, PROP_DEFINITION_HASH].forEach(function (k) { props.deleteProperty(k); });
+  writeLog('INFO', 'FOREIGN_FORM_FORGOTTEN', formId, 'この表に記録の無いフォーム（コピー元のもの）の記録を消しました');
 }
 
 /** 受付ページ（reception/）が使う名簿・資料・割り当てのシート。名簿と資料は先生（と Claude）が入れる。 */

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { planNewJobs, pickRunnable, findStaleJobs, afterAttempt, shouldStop } = require('../src/QueuePlan.js');
+const { planNewJobs, pickRunnable, findStaleJobs, afterAttempt, shouldStop, hasOpenJobs } = require('../src/QueuePlan.js');
 
 const T0 = new Date('2026-10-20T10:00:00Z');
 const min = (n) => new Date(T0.getTime() + n * 60000);
@@ -50,4 +50,12 @@ test('失敗すれば間隔を空けて RETRY、上限を超えたら FAILED', (
 test('実行時間の予算を超えたら止める', () => {
   assert.equal(shouldStop(0, 239000, 240000), false);
   assert.equal(shouldStop(0, 240000, 240000), true);
+});
+
+test('PENDING・RETRY・PROCESSING が残っていれば未完了の仕事あり。確定・確認待ち・失敗だけなら無し', () => {
+  assert.equal(hasOpenJobs([]), false);
+  assert.equal(hasOpenJobs([{ status: 'COMPLETED' }, { status: 'REVIEW_REQUIRED' }, { status: 'FAILED' }]), false);
+  ['PENDING', 'RETRY', 'PROCESSING'].forEach((status) => {
+    assert.equal(hasOpenJobs([{ status: 'COMPLETED' }, { status }]), true, status);
+  });
 });

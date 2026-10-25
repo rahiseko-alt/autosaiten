@@ -56,6 +56,14 @@ function afterAttempt(job, outcome, now) {
   };
 }
 
+/**
+ * 定期処理がまだ進める仕事（PENDING・RETRY・PROCESSING）が残っているか。
+ * REVIEW_REQUIRED は先生の「手動採点を反映」を待つだけで、FAILED はもう処理しないので含めない。
+ */
+function hasOpenJobs(jobs) {
+  return jobs.some(function (j) { return j.status === 'PENDING' || j.status === 'RETRY' || j.status === 'PROCESSING'; });
+}
+
 function shouldStop(startMs, nowMs, budgetMs) {
   return nowMs - startMs >= budgetMs;
 }
@@ -63,6 +71,6 @@ function shouldStop(startMs, nowMs, budgetMs) {
 if (typeof module !== 'undefined') {
   module.exports = {
     planNewJobs: planNewJobs, pickRunnable: pickRunnable, findStaleJobs: findStaleJobs,
-    afterAttempt: afterAttempt, shouldStop: shouldStop
+    afterAttempt: afterAttempt, shouldStop: shouldStop, hasOpenJobs: hasOpenJobs
   };
 }

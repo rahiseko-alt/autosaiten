@@ -7,6 +7,7 @@ var PROP_ACTIVE_FORM_ID = 'ACTIVE_FORM_ID';
 var PROP_FORM_VERSION = 'FORM_VERSION';
 var PROP_DEFINITION_HASH = 'DEFINITION_HASH';
 
+/** @return {'CREATE'|'NOOP'|'SYNC'|'NEW_VERSION'} 行ったこと */
 function buildOrVersionForm() {
   var props = PropertiesService.getDocumentProperties();
   var settings = readSettings();
@@ -33,9 +34,11 @@ function buildOrVersionForm() {
   });
 
   if (action === 'NOOP') {
+    // 手で「回答の概要を表示する」をオンにされても、押し直せば戻る（ADR 0011）
+    form.setPublishingSummary(false);
     syncClassChoices_(form, version, classes);
     showFormInfo_(form, version);
-    return;
+    return action;
   }
   var spec = buildFormSpec(questions, settings, classes);
 
@@ -61,6 +64,7 @@ function buildOrVersionForm() {
     writeLog('INFO', 'FORM_CLOSED', oldForm.getId(), '旧フォームの回答受付を停止しました', { form_version: version - 1 });
   }
   showFormInfo_(form, version);
+  return action;
 }
 
 /**
@@ -101,6 +105,8 @@ function populateForm_(form, spec, version) {
   form.setTitle(spec.title);
   form.setDescription(spec.description);
   form.setIsQuiz(true);
+  // 他の学生の回答が見えないよう、「回答の概要を表示する」は常にオフ（ADR 0011）
+  form.setPublishingSummary(false);
   form.setCollectEmail(spec.collectEmail);
   form.setAllowResponseEdits(false);
   form.setLimitOneResponsePerUser(spec.limitOneResponse);
@@ -108,8 +114,10 @@ function populateForm_(form, spec, version) {
 
   var now = new Date();
   var mapping = [];
-  // 先頭に氏名欄。採点の対象ではないが、誰の答案かを結果に出すため対応表に記録する
+  // 先頭に氏名欄。採点の対象ではないが、誰の答案かを結果に出すため対応表に記録する。
+  // 合計点と講評の受け皿なので、配点を満点にする（ADR 0013。フォームは0点の設定を受け付けない）
   var nameItem = form.addTextItem().setTitle(spec.nameItem.title).setRequired(spec.nameItem.required);
+  if (spec.nameItem.points > 0) nameItem.setPoints(spec.nameItem.points);
   mapping.push([version, form.getId(), NAME_QUESTION_ID, String(nameItem.getId()), now]);
   if (spec.classItem) {
     var classItem = form.addMultipleChoiceItem().setTitle(spec.classItem.title).setRequired(spec.classItem.required);
@@ -128,9 +136,8 @@ function populateForm_(form, spec, version) {
     item.setTitle(it.title);
     if (it.help_text) item.setHelpText(it.help_text);
     item.setRequired(it.required);
-    // フォームは0点の設定を受け付けない（新しい項目は初めから0点）
-    if (it.points > 0) item.setPoints(it.points);
-    applyFeedback_(item, it);
+    // 問題の項目には点数もフィードバックも付けない。採点は仕組みの中で行い、合計点と講評は氏名欄に出す（ADR 0013）。
+    // 選択肢の正解を設定しないので、フィードバックを付けると全員に「不正解」のほうが出てしまう
     mapping.push([version, form.getId(), it.question_id, String(item.getId()), now]);
   });
   var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.FORM_MAPPING);
@@ -149,15 +156,6 @@ function addItem_(form, it) {
     case 'CHECKBOX': return choiceFor(form.addCheckboxItem());
     case 'DROPDOWN': return choiceFor(form.addListItem());
     default: throw new Error('未対応の問題タイプ: ' + it.kind);
-  }
-}
-
-function applyFeedback_(item, it) {
-  if (it.feedback_correct && typeof item.setFeedbackForCorrect === 'function') {
-    item.setFeedbackForCorrect(FormApp.createFeedback().setText(it.feedback_correct).build());
-  }
-  if (it.feedback_incorrect && typeof item.setFeedbackForIncorrect === 'function') {
-    item.setFeedbackForIncorrect(FormApp.createFeedback().setText(it.feedback_incorrect).build());
   }
 }
 
