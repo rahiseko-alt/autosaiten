@@ -147,10 +147,8 @@ function populateForm_(form, spec, version) {
 
   var now = new Date();
   var mapping = [];
-  // 先頭に氏名欄。採点の対象ではないが、誰の答案かを結果に出すため対応表に記録する。
-  // 合計点と講評の受け皿なので、配点を満点にする（ADR 0013。フォームは0点の設定を受け付けない）
+  // 先頭に氏名欄。採点の対象ではないが、誰の答案かを結果に出すため対応表に記録する。配点は付けない
   var nameItem = form.addTextItem().setTitle(spec.nameItem.title).setRequired(spec.nameItem.required);
-  if (spec.nameItem.points > 0) nameItem.setPoints(spec.nameItem.points);
   mapping.push([version, form.getId(), NAME_QUESTION_ID, String(nameItem.getId()), now]);
   if (spec.classItem) {
     var classItem = form.addMultipleChoiceItem().setTitle(spec.classItem.title).setRequired(spec.classItem.required);
@@ -169,10 +167,15 @@ function populateForm_(form, spec, version) {
     item.setTitle(it.title);
     if (it.help_text) item.setHelpText(it.help_text);
     item.setRequired(it.required);
-    // 問題の項目には点数もフィードバックも付けない。採点は仕組みの中で行い、合計点と講評は氏名欄に出す（ADR 0013）。
+    // 問題の項目には点数もフィードバックも付けない。採点は仕組みの中で行い、合計点と講評は採点結果の欄に出す（ADR 0013）。
     // 選択肢の正解を設定しないので、フィードバックを付けると全員に「不正解」のほうが出てしまう
     mapping.push([version, form.getId(), it.question_id, String(item.getId()), now]);
   });
+  // 一番最後に採点結果の欄。合計点と講評の受け皿なので、必須にして配点を満点にする（ADR 0013。フォームは0点の設定を受け付けない）
+  var resultItem = form.addTextItem().setTitle(spec.resultItem.title).setHelpText(spec.resultItem.help_text)
+    .setRequired(spec.resultItem.required);
+  if (spec.resultItem.points > 0) resultItem.setPoints(spec.resultItem.points);
+  mapping.push([version, form.getId(), RESULT_QUESTION_ID, String(resultItem.getId()), now]);
   var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.FORM_MAPPING);
   if (mapping.length > 0) sheet.getRange(sheet.getLastRow() + 1, 1, mapping.length, 5).setValues(mapping);
 }

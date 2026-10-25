@@ -112,6 +112,13 @@ var NAME_QUESTION_ID = '__NAME__';
 var NAME_ITEM_TITLE = '氏名（Name）';
 /** 氏名欄の次のクラス欄。氏名欄と同じく採点の対象にしない。 */
 var CLASS_QUESTION_ID = '__CLASS__';
+/**
+ * 問題の項目のあとの、最後の採点結果の欄。合計点と講評の受け皿で、採点の対象にしない（ADR 0013）。
+ * 回答の無い項目には点を書き込めないので必須にする。
+ */
+var RESULT_QUESTION_ID = '__RESULT__';
+var RESULT_ITEM_TITLE = '採点結果（ここに「確認」と入力してください）';
+var RESULT_ITEM_HELP = '返却のとき、ここに合計点と講評が表示されます';
 
 var QUESTION_TYPES = ['SHORT_TEXT', 'PARAGRAPH', 'MULTIPLE_CHOICE', 'CHECKBOX', 'DROPDOWN', 'INFO'];
 var GRADING_MODES = ['AUTO', 'LLM', 'MANUAL', 'NONE'];
