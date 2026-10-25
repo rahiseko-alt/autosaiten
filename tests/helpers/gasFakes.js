@@ -195,6 +195,7 @@ function createGasContext(options) {
     PropertiesService: { getDocumentProperties: () => propsApi(props.document), getScriptProperties: () => propsApi(props.script) },
     LockService: { getDocumentLock: () => lock, getScriptLock: () => lock },
     ScriptApp: {
+      getOAuthToken: () => 'token',
       getProjectTriggers: () => triggers.slice(),
       newTrigger: (fn) => triggerBuilder(fn),
       deleteTrigger: (t) => { const i = triggers.indexOf(t); if (i >= 0) triggers.splice(i, 1); }
