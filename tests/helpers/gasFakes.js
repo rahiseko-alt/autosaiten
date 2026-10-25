@@ -107,6 +107,8 @@ class FakeItem {
   createChoice(value, correct) { return { value, correct, getValue() { return value; } }; }
   getChoices() { return this.choices.slice(); }
   asMultipleChoiceItem() { return this; }
+  asListItem() { return this; }
+  getType() { return this.kind; }
   setFeedbackForCorrect(f) { this.feedbackForCorrect = f; return this; }
   setFeedbackForIncorrect(f) { this.feedbackForIncorrect = f; return this; }
 }
@@ -190,6 +192,7 @@ function createGasContext(options) {
     },
     FormApp: {
       DestinationType: { SPREADSHEET: 'SPREADSHEET' },
+      ItemType: { LIST: 'DROPDOWN', TEXT: 'TEXT', MULTIPLE_CHOICE: 'MULTIPLE_CHOICE' },
       create: (title) => { const f = new FakeForm('form' + (++formCount), title); forms[f.id] = f; return f; },
       openById: (id) => { if (!forms[id]) throw new Error('not found'); return forms[id]; },
       createFeedback: () => ({ setText(t) { this.text = t; return this; }, build() { return { text: this.text, getText: () => this.text }; } })

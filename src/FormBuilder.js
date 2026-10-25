@@ -6,9 +6,12 @@
 var PROP_ACTIVE_FORM_ID = 'ACTIVE_FORM_ID';
 var PROP_FORM_VERSION = 'FORM_VERSION';
 var PROP_DEFINITION_HASH = 'DEFINITION_HASH';
+var PROP_NAME_MODE = 'NAME_MODE';
 
 /** 直前の buildOrVersionForm で、メールアドレスの収集を「確認済み」にできなかったか。Control が案内に使う。 */
 var fbVerifiedEmailFailed_ = false;
+/** 直前の buildOrVersionForm で、名簿の有無で氏名欄の形（手入力／プルダウン）が変わって新しい版になったか。Control が案内に使う。 */
+var fbNameModeChanged_ = false;
 
 /** @return {'CREATE'|'NOOP'|'SYNC'|'NEW_VERSION'} 行ったこと */
 function buildOrVersionForm() {
@@ -16,7 +19,10 @@ function buildOrVersionForm() {
   var settings = readSettings();
   var questions = readTable(SHEET_NAMES.QUESTIONS);
   var classes = rosterClasses_();
-  var hash = definitionHash(questions, settings, classes);
+  // 氏名は名簿から選ぶプルダウンにする。名簿が空のときは手入力のまま（ADR 0014）
+  var names = rosterNameChoices(readTable(SHEET_NAMES.ROSTER));
+  var nameMode = names.length > 0 ? 'DROPDOWN' : 'TEXT';
+  var hash = definitionHash(questions, settings, classes, names);
 
   var formId = props.getProperty(PROP_ACTIVE_FORM_ID);
   var form = null;
@@ -37,15 +43,20 @@ function buildOrVersionForm() {
   });
 
   fbVerifiedEmailFailed_ = false;
+  fbNameModeChanged_ = false;
   if (action === 'NOOP') {
     // 手で「回答の概要を表示する」をオンにされても、押し直せば戻る（ADR 0011）
     form.setPublishingSummary(false);
     requireVerifiedEmail_(form, settings);
     syncClassChoices_(form, version, classes);
+    syncNameChoices_(form, version, names);
     showFormInfo_(form, version);
     return action;
   }
-  var spec = buildFormSpec(questions, settings, classes);
+  var spec = buildFormSpec(questions, settings, classes, names);
+  // 名簿が空から埋まった（または空になった）ときは氏名欄の形が変わる。回答があれば新しい版になるので、案内に使う
+  var previousMode = props.getProperty(PROP_NAME_MODE);
+  if (action === 'NEW_VERSION' && previousMode && previousMode !== nameMode) fbNameModeChanged_ = true;
 
   var oldForm = null;
   if (action === 'CREATE' || action === 'NEW_VERSION') {
@@ -65,6 +76,7 @@ function buildOrVersionForm() {
   props.setProperty(PROP_ACTIVE_FORM_ID, form.getId());
   props.setProperty(PROP_FORM_VERSION, String(version));
   props.setProperty(PROP_DEFINITION_HASH, hash);
+  props.setProperty(PROP_NAME_MODE, nameMode);
   if (oldForm) {
     oldForm.setAcceptingResponses(false);
     writeLog('INFO', 'FORM_CLOSED', oldForm.getId(), '旧フォームの回答受付を停止しました', { form_version: version - 1 });
@@ -90,6 +102,33 @@ function syncClassChoices_(form, version, classes) {
   if (current.join('\n') === classes.join('\n')) return;
   choiceItem.setChoices(classes.map(function (c) { return choiceItem.createChoice(c); }));
   writeLog('INFO', 'FORM_CLASS_CHOICES_SYNCED', form.getId(), 'クラス欄の選択肢を名簿に合わせました', { before: current, after: classes });
+}
+
+/**
+ * 氏名欄（プルダウン）の選択肢を名簿に合わせる。名簿に学生を足したあと「これでOK」を押し直すだけで反映する。
+ * 選択肢だけを直し、回答は消えず、新しい版も作らない（ADR 0014）。氏名欄が手入力のとき・氏名欄が無いとき・選択肢が同じときは何もしない。
+ */
+function syncNameChoices_(form, version, names) {
+  if (names.length === 0) return;
+  var mapped = readTable(SHEET_NAMES.FORM_MAPPING).filter(function (r) {
+    return Number(r.form_version) === version && r.question_id === NAME_QUESTION_ID;
+  })[0];
+  if (!mapped) return;
+  var item = form.getItemById(Number(mapped.form_item_id));
+  if (!item || item.getType() !== FormApp.ItemType.LIST) return;
+  var listItem = item.asListItem();
+  var current = listItem.getChoices().map(function (c) { return c.getValue(); });
+  if (sameChoices(current, names)) return;
+  listItem.setChoices(names.map(function (n) { return listItem.createChoice(n); }));
+  writeLog('INFO', 'FORM_NAME_CHOICES_SYNCED', form.getId(), '氏名欄の選択肢を名簿に合わせました', { before: current.length, after: names.length });
+}
+
+/** 名簿に同じ氏名の人がいるとき、先生に伝えるエラー文（直し方つき）。いなければ空の配列。 */
+function rosterNameErrors_() {
+  var dup = findDuplicateNames(readTable(SHEET_NAMES.ROSTER));
+  if (dup.length === 0) return [];
+  return ['・名簿に同じ氏名の人がいます（' + dup.map(function (n) { return '「' + n + '」'; }).join('、') +
+    '）。プルダウンで見分けられるよう、名簿の氏名を直してから（例「山田 太郎（2）」）、もう一度「これでOK」を押してください。'];
 }
 
 /** 名簿シートのクラスを、出てきた順に重複なく返す。名簿が無ければ空。 */
@@ -151,7 +190,15 @@ function populateForm_(form, spec, version) {
   var now = new Date();
   var mapping = [];
   // 先頭に氏名欄。採点の対象ではないが、誰の答案かを結果に出すため対応表に記録する。配点は付けない
-  var nameItem = form.addTextItem().setTitle(spec.nameItem.title).setRequired(spec.nameItem.required);
+  // 名簿があるテストは、名簿の氏名を選ぶプルダウン。無いときは手入力（ADR 0014）
+  var nameItem;
+  if (spec.nameItem.kind === 'DROPDOWN') {
+    nameItem = form.addListItem();
+    nameItem.setChoices(spec.nameItem.choices.map(function (n) { return nameItem.createChoice(n); }));
+  } else {
+    nameItem = form.addTextItem();
+  }
+  nameItem.setTitle(spec.nameItem.title).setRequired(spec.nameItem.required);
   mapping.push([version, form.getId(), NAME_QUESTION_ID, String(nameItem.getId()), now]);
   if (spec.classItem) {
     var classItem = form.addMultipleChoiceItem().setTitle(spec.classItem.title).setRequired(spec.classItem.required);

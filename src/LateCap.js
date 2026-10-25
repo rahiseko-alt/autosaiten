@@ -49,7 +49,8 @@ function lcRosterClass_(roster, name) {
   var key = lcName_(name);
   var classes = {};
   (roster || []).forEach(function (r) {
-    if (key !== '' && lcName_(r.氏名) === key) classes[lcNorm_(r.クラス)] = true;
+    // 名簿のクラスが空の行は、クラスを引けたことにしない（空のクラスで授業の終わる日時を探してしまうため）
+    if (key !== '' && lcName_(r.氏名) === key && !lcBlank_(r.クラス)) classes[lcNorm_(r.クラス)] = true;
   });
   var found = Object.keys(classes);
   return found.length === 1 ? found[0] : null;
@@ -58,7 +59,7 @@ function lcRosterClass_(roster, name) {
 /**
  * 1回答の `__LATE__` の行を決める。合計点は `__LATE__` を除く最終点の和。
  * - 上限点が空欄、授業内の提出、合計が上限以下 → 行なし（null）
- * - 名簿で見つからない、選んだクラスと名簿のクラスが違う、終わる日時が空欄 → 要確認（先生が manual_score で決める）
+ * - 名簿で見つからない、選んだクラスと名簿のクラスが違う（回答のクラスが空のときは突き合わせない）、終わる日時が空欄 → 要確認（先生が manual_score で決める）
  * - 授業外で合計が上限を超える → 最終点「上限点 − 合計点」
  * manual_score が入った既存の `__LATE__` 行は、先生の判断としてそのまま残す。
  * @param {{rows: Object[], cap: *, classEnds: Object, roster: Object[], now: Date}} input
@@ -88,7 +89,8 @@ function planLateRow(input) {
   var end = rosterClass === null ? null : lcTime_((input.classEnds || {})[rosterClass]);
   if (rosterClass === null) {
     reason = '名簿で氏名「' + base.respondent_name + '」のクラスが決められません';
-  } else if (lcNorm_(base.respondent_class) !== rosterClass) {
+  } else if (!lcBlank_(base.respondent_class) && lcNorm_(base.respondent_class) !== rosterClass) {
+    // 回答のクラスが空（氏名を名簿から選ぶフォーム。ADR 0014）のときは突き合わせず、名簿のクラスで判定する
     reason = '選んだクラス（' + base.respondent_class + '）と名簿のクラス（' + rosterClass + '）が違います';
   } else if (end === null) {
     reason = rosterClass + 'の授業の終わる日時が空欄です';

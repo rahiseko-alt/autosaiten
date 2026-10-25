@@ -3,6 +3,7 @@
  */
 
 var PUBLISH_GRADES_GUIDE = 'フォームの設定で、「成績の発表」を「確認後に手動で表示する」にし、「回答者の設定」の「点数」をオンにしてください（確定前の点数が見えず、返却後は合計点が見えるように）';
+var NAME_MODE_CHANGED_GUIDE = '名簿の有無が変わり、氏名欄の形（手入力／名簿から選ぶ）が変わるので、新しい版のフォームを作りました。学生に配るフォームURLが変わります';
 var VERIFIED_EMAIL_GUIDE = 'メールアドレスの収集を「確認済み」にできませんでした。フォームの設定の「回答」で、「メールアドレスを収集する」を「確認済み」にしてください';
 
 function handleControlEdit(e) {
@@ -47,6 +48,8 @@ function runBuildFlow_() {
         settings: readSettings()
       }).map(toTeacherMessage);
     }
+    // 名簿に同姓同名がいるとプルダウンで見分けられないので、Questions を書き換える前に止める（ADR 0014）
+    errors = errors.concat(rosterNameErrors_());
     if (errors.length > 0) {
       // 不備があるときは裏方の Questions を書き換えない（採点中の答案に影響させない）
       setControl('STATUS', 'ERROR');
@@ -66,6 +69,7 @@ function runBuildFlow_() {
     var message = '準備ができました。フォームURLを学生に配ってください';
     // 成績の公開の設定は仕組みから変えられないので、新しいフォームのたびに先生に頼む（ADR 0013）
     if (action === 'CREATE' || action === 'NEW_VERSION') message += '\n' + PUBLISH_GRADES_GUIDE;
+    if (fbNameModeChanged_) message += '\n' + NAME_MODE_CHANGED_GUIDE;
     if (fbVerifiedEmailFailed_) message += '\n' + VERIFIED_EMAIL_GUIDE;
     setControl('MESSAGE', message);
     writeLog('INFO', 'BUILD_COMPLETED', '', 'フォーム生成が完了しました');

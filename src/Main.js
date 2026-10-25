@@ -26,6 +26,7 @@ function menuValidate() {
       settings: readSettings()
     }).map(toTeacherMessage);
   }
+  errors = errors.concat(rosterNameErrors_());
   setControl('STATUS', errors.length > 0 ? 'ERROR' : 'IDLE');
   setControl('MESSAGE', errors.length > 0 ? errors.join('\n') : '設定に問題はありません');
 }

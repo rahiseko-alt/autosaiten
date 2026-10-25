@@ -7,6 +7,35 @@ var FORM_PLAN_TYPE_KIND_ = {
   CHECKBOX: 'CHECKBOX', DROPDOWN: 'DROPDOWN', INFO: 'INFO'
 };
 
+/** 氏名の比べ方。LateCap.js の lcName_・集計表の gbName_ と同じく、NFKC・大文字小文字・空白の違いをそろえる。 */
+function fpNameKey_(v) {
+  return String(v === undefined || v === null ? '' : v).normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** 名簿の氏名を、プルダウンの選択肢にする。名簿の順で、前後の空白を除き、空の行は捨てる（ADR 0014）。 */
+function rosterNameChoices(roster) {
+  return (roster || []).map(function (r) { return String(r.氏名 === undefined || r.氏名 === null ? '' : r.氏名).trim(); })
+    .filter(function (name) { return name !== ''; });
+}
+
+/** 名簿で、同じ氏名（比べ方は fpNameKey_）が2人以上いるものを、最初に出た綴りで返す。 */
+function findDuplicateNames(roster) {
+  var count = {};
+  var first = {};
+  var order = [];
+  rosterNameChoices(roster).forEach(function (name) {
+    var key = fpNameKey_(name);
+    if (count[key] === undefined) { count[key] = 0; first[key] = name; order.push(key); }
+    count[key] += 1;
+  });
+  return order.filter(function (key) { return count[key] > 1; }).map(function (key) { return first[key]; });
+}
+
+/** 選択肢が、順序まで同じか。 */
+function sameChoices(a, b) {
+  return a.length === b.length && a.every(function (v, i) { return v === b[i]; });
+}
+
 function fpSplit_(value) {
   var list = (typeof splitList === 'function') ? splitList : require('./Utils.js').splitList;
   return list(value);
@@ -23,8 +52,9 @@ function fpRequired_(q) {
 /**
  * 設定を組み立てた、フォームの仕様。順番どおりに並んだ項目と、フォーム全体の設定を返す。
  * @param {string[]} [classes] 名簿のクラス。あれば氏名欄の次にクラス欄を付ける
+ * @param {string[]} [names] 名簿の氏名（rosterNameChoices の結果）。あれば氏名欄を名簿から選ぶプルダウンにし、クラス欄は付けない（ADR 0014）
  */
-function buildFormSpec(questions, settings, classes) {
+function buildFormSpec(questions, settings, classes, names) {
   var previousSection = null;
   var items = questions.filter(fpEnabled_).map(function (q) {
     var section = String(q.section || '').trim();
@@ -68,14 +98,21 @@ function buildFormSpec(questions, settings, classes) {
       required: true, points: total, choice: '確認しました'
     }
   };
+  // 氏名を名簿から選ぶときだけ nameItem に印を足す。名簿が空のときの spec は、従来と1文字も変えない（定義の指紋のため）
+  if (names && names.length > 0) {
+    spec.nameItem = { title: spec.nameItem.title, required: spec.nameItem.required, points: 0, kind: 'DROPDOWN', choices: names.slice() };
+    return spec;
+  }
   // クラス欄が無いときは項目ごと入れない（定義の指紋を、クラス欄ができる前と同じに保つ）
   if (classes && classes.length > 0) spec.classItem = { title: 'クラス（Class）', required: true, choices: classes.slice() };
   return spec;
 }
 
 /** フォームに影響する定義だけから、短い指紋を作る（FNV-1a 32bit + 長さ）。 */
-function definitionHash(questions, settings, classes) {
-  var spec = buildFormSpec(questions, settings, classes);
+function definitionHash(questions, settings, classes, names) {
+  var spec = buildFormSpec(questions, settings, classes, names);
+  // 氏名の選択肢の中身は入れない（名簿に学生を足しても新しい版にしない。押し直しで選択肢だけを直す。ADR 0014）
+  if (spec.nameItem.choices) spec.nameItem = Object.assign({}, spec.nameItem, { choices: [] });
   var raw = JSON.stringify(spec);
   var h = 0x811c9dc5;
   for (var i = 0; i < raw.length; i++) {
@@ -97,5 +134,8 @@ function decideFormAction(state) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { buildFormSpec: buildFormSpec, definitionHash: definitionHash, decideFormAction: decideFormAction };
+  module.exports = {
+    buildFormSpec: buildFormSpec, definitionHash: definitionHash, decideFormAction: decideFormAction,
+    rosterNameChoices: rosterNameChoices, findDuplicateNames: findDuplicateNames, sameChoices: sameChoices, fpNameKey_: fpNameKey_
+  };
 }
