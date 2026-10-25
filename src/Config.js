@@ -117,7 +117,8 @@ var CLASS_QUESTION_ID = '__CLASS__';
  * 回答の無い項目には点を書き込めないので必須にする。
  */
 var RESULT_QUESTION_ID = '__RESULT__';
-var RESULT_ITEM_TITLE = '採点結果（ここに「確認」と入力してください）';
+var RESULT_ITEM_TITLE = '採点結果（「確認しました」を選んでください）';
+var RESULT_ITEM_CHOICE = '確認しました';
 var RESULT_ITEM_HELP = '返却のとき、ここに合計点と講評が表示されます';
 
 var QUESTION_TYPES = ['SHORT_TEXT', 'PARAGRAPH', 'MULTIPLE_CHOICE', 'CHECKBOX', 'DROPDOWN', 'INFO'];

@@ -175,8 +175,10 @@ function populateForm_(form, spec, version) {
     mapping.push([version, form.getId(), it.question_id, String(item.getId()), now]);
   });
   // 一番最後に採点結果の欄。合計点と講評の受け皿なので、必須にして配点を満点にする（ADR 0013。フォームは0点の設定を受け付けない）
-  var resultItem = form.addTextItem().setTitle(spec.resultItem.title).setHelpText(spec.resultItem.help_text)
+  // 選択肢が1つだけの選択式。学生は押すだけで済み、押した回答に点と講評を書き込める
+  var resultItem = form.addMultipleChoiceItem().setTitle(spec.resultItem.title).setHelpText(spec.resultItem.help_text)
     .setRequired(spec.resultItem.required);
+  resultItem.setChoices([resultItem.createChoice(spec.resultItem.choice, false)]);
   if (spec.resultItem.points > 0) resultItem.setPoints(spec.resultItem.points);
   mapping.push([version, form.getId(), RESULT_QUESTION_ID, String(resultItem.getId()), now]);
   var sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAMES.FORM_MAPPING);

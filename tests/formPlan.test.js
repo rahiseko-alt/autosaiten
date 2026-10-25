@@ -116,9 +116,9 @@ test('氏名欄には配点が付かず、最後の採点結果の欄の配点�
   ], settings);
   assert.equal(spec.nameItem.points, 0);
   assert.deepEqual(spec.resultItem, {
-    title: '採点結果（ここに「確認」と入力してください）',
+    title: '採点結果（「確認しました」を選んでください）',
     help_text: '返却のとき、ここに合計点と講評が表示されます',
-    required: true, points: 15
+    required: true, points: 15, choice: '確認しました'
   });
 });
 

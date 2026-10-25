@@ -62,10 +62,10 @@ function buildFormSpec(questions, settings, classes) {
     limitOneResponse: !(settings.LIMIT_ONE_RESPONSE === false || String(settings.LIMIT_ONE_RESPONSE).toUpperCase() === 'FALSE'),
     nameItem: { title: '氏名（Name）', required: true, points: 0 },
     items: items,
-    // 回答の無い項目には点を書き込めないので必須にする
+    // 回答の無い項目には点を書き込めないので必須にする。学生は選択肢を1つ押すだけで済む
     resultItem: {
-      title: '採点結果（ここに「確認」と入力してください）', help_text: '返却のとき、ここに合計点と講評が表示されます',
-      required: true, points: total
+      title: '採点結果（「確認しました」を選んでください）', help_text: '返却のとき、ここに合計点と講評が表示されます',
+      required: true, points: total, choice: '確認しました'
     }
   };
   // クラス欄が無いときは項目ごと入れない（定義の指紋を、クラス欄ができる前と同じに保つ）

@@ -26,7 +26,7 @@ test('氏名欄・クラス欄・採点結果の欄・加点なしの欄は、�
   const text = buildCommentary([
     row({ question_id: '__NAME__', question_text_snapshot: '氏名（Name）' }),
     row({ question_id: '__CLASS__', question_text_snapshot: 'クラス（Class）' }),
-    row({ question_id: '__RESULT__', question_text_snapshot: '採点結果（ここに「確認」と入力してください）' }),
+    row({ question_id: '__RESULT__', question_text_snapshot: '採点結果（「確認しました」を選んでください）' }),
     row({ question_id: 'Q003', question_text_snapshot: 'タグの名前', final_score: 0, max_score: 0, status: 'NO_POINTS', grading_reason: '加点なしの欄' }),
     row()
   ]);
