@@ -139,6 +139,7 @@ function runJob_(job, rowIndex, settings, force) {
         return r.response_id === job.response_id && r.question_id === LATE_QUESTION_ID;
       });
       var recomputed = recomputeResponses(saved.concat(lateKept), late)[job.response_id];
+      if (!recomputed) throw new Error('採点する問題がありません。問題の表（Questions）とフォームの対応を確認してください');
       done = { rows: recomputed.rows, finalized: recomputed.finalized };
     }
     // 授業外の上限は、結果を書く時点で毎回決め直す（不要になった行は消す）
@@ -185,10 +186,23 @@ function gradeJob_(job, settings, deps) {
   delete answers[RESULT_QUESTION_ID];
   var mappedIds = {};
   Object.keys(questionOfItem).forEach(function (k) { mappedIds[questionOfItem[k]] = true; });
+  var allQuestions = readTable(SHEET_NAMES.QUESTIONS);
   // その版のフォームに載っていた問題は、今は掲載を外していても採点する
-  var questions = readTable(SHEET_NAMES.QUESTIONS)
+  var questions = allQuestions
     .filter(function (q) { return mappedIds[q.question_id]; })
     .map(function (q) { return Object.assign({}, q, { enabled: true }); });
+  // 画像などの提出物を採点する「説明」の問題は、アップロードされたファイルを回答として手動採点に回す
+  var uploaded = [];
+  formResponse.getItemResponses().forEach(function (ir) {
+    var item = ir.getItem();
+    if (typeof item.getType === 'function' && item.getType() === FormApp.ItemType.FILE_UPLOAD) uploaded = uploaded.concat(ir.getResponse());
+  });
+  submissionQuestions(allQuestions).forEach(function (q) {
+    if (mappedIds[q.question_id]) return;
+    questions.push(q);
+    var text = uploadAnswerText(uploaded);
+    if (text !== '') answers[q.question_id] = text;
+  });
 
   return gradeResponse({
     response: {

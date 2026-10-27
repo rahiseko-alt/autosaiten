@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { gradeResponse, mergeResults, latestRubricCriteria } = require('../src/ResponseGrader.js');
+const { gradeResponse, mergeResults, latestRubricCriteria, submissionQuestions, uploadAnswerText } = require('../src/ResponseGrader.js');
 const { MockProvider } = require('./MockProvider.js');
 
 const questions = [
@@ -113,4 +113,37 @@ test('配点0の記述は加点なしで0点確定になり、回答全体の確
 test('回答者のクラスを行に残す', () => {
   const out = gradeResponse({ response: Object.assign({}, response, { respondent_class: '国際' }), questions: [questions[0]], rubrics, settings, provider: llmOk(), now });
   assert.equal(out.rows[0].respondent_class, '国際');
+});
+
+test('点の付いた「説明」の問題は、手動採点の提出物として扱う', () => {
+  const qs = [
+    { enabled: 'TRUE', question_id: 'Q001', question_type: 'INFO', points: 8, grading_mode: 'NONE', question_text: '完成画像を作る' },
+    { enabled: 'TRUE', question_id: 'Q002', question_type: 'INFO', points: 0, grading_mode: 'NONE', question_text: '注意書き' },
+    { enabled: 'FALSE', question_id: 'Q003', question_type: 'INFO', points: 4, grading_mode: 'NONE', question_text: '外した問題' },
+    { enabled: 'TRUE', question_id: 'Q004', question_type: 'SHORT_TEXT', points: 2, grading_mode: 'AUTO', question_text: '普通の問題' }
+  ];
+  const picked = submissionQuestions(qs);
+  assert.deepEqual(picked.map((q) => q.question_id), ['Q001']);
+  assert.equal(picked[0].grading_mode, 'MANUAL');
+});
+
+test('提出物の回答は、アップロードしたファイルのURLを1行ずつにする', () => {
+  assert.equal(uploadAnswerText(['abc', ' def ', '']), 'https://drive.google.com/open?id=abc\nhttps://drive.google.com/open?id=def');
+  assert.equal(uploadAnswerText([]), '');
+  assert.equal(uploadAnswerText(undefined), '');
+});
+
+test('提出物を採点する「説明」の問題は、画像があれば手動採点待ち、無ければ未回答になる', () => {
+  const q = submissionQuestions([{ enabled: 'TRUE', question_id: 'Q001', question_type: 'INFO', points: 8, question_text: '完成画像' }]);
+  const withImage = gradeResponse({
+    response: { response_id: 'r1', form_version: 1, submitted_at: now, respondent_email: 'a@example.com', answers: { Q001: uploadAnswerText(['x']) } },
+    questions: q, rubrics: [], settings, provider: llmOk(), now
+  });
+  assert.equal(withImage.rows[0].status, 'MANUAL_PENDING');
+  assert.equal(withImage.finalized, false);
+  const noImage = gradeResponse({
+    response: { response_id: 'r2', form_version: 1, submitted_at: now, respondent_email: 'b@example.com', answers: {} },
+    questions: q, rubrics: [], settings, provider: llmOk(), now
+  });
+  assert.equal(noImage.rows[0].status, 'UNANSWERED');
 });
