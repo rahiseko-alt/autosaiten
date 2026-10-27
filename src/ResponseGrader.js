@@ -27,6 +27,24 @@ function latestRubricCriteria(rubrics, rubricId) {
   };
 }
 
+/**
+ * 提出物（画像など）を採点する「説明」の問題を選ぶ。点が付いた「説明」は、先生が手でアップロード欄を足して使うので、
+ * フォームの欄とは結び付けず、手動採点の問題として扱う。
+ */
+function submissionQuestions(questions) {
+  return questions.filter(function (q) {
+    var on = q.enabled === true || String(q.enabled).trim().toUpperCase() === 'TRUE';
+    return on && q.question_type === 'INFO' && Number(q.points) > 0;
+  }).map(function (q) { return Object.assign({}, q, { grading_mode: 'MANUAL' }); });
+}
+
+/** アップロードされたファイルの ID を、回答として残す文字列（1行に1ファイルのURL）にする。無ければ ''。 */
+function uploadAnswerText(fileIds) {
+  return (fileIds || []).filter(function (id) { return !rgIsBlank_(id); })
+    .map(function (id) { return 'https://drive.google.com/open?id=' + String(id).trim(); })
+    .join('\n');
+}
+
 function rgBaseRow_(response, q, settings, now) {
   return {
     response_id: response.response_id, form_version: response.form_version, submitted_at: response.submitted_at,
@@ -144,5 +162,8 @@ function mergeResults(existing, fresh) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { gradeResponse: gradeResponse, mergeResults: mergeResults, latestRubricCriteria: latestRubricCriteria };
+  module.exports = {
+    gradeResponse: gradeResponse, mergeResults: mergeResults, latestRubricCriteria: latestRubricCriteria,
+    submissionQuestions: submissionQuestions, uploadAnswerText: uploadAnswerText
+  };
 }
